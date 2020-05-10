@@ -27,6 +27,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;
+;; Merged with easy/fancy/footer stylesheets
+;; by Christopher Lam in 2019
 ;; Modified by Graham Billiau to include a text footer
 ;; with small adjustments by Frank H. Ellenberger 2010
 ;
@@ -41,36 +43,40 @@
 (gnc:module-load "gnucash/html" 0)
 (gnc:module-load "gnucash/report/report-system" 0)
 
-(define (footer-options)
+(define (easy-fancy-footer-options)
   (let* ((options (gnc:new-options))
          (opt-register
           (lambda (opt)
             (gnc:register-option options opt))))
+
     (opt-register
      (gnc:make-string-option
       (N_ "General")
       (N_ "Preparer") "a"
       (N_ "Name of person preparing the report.")
       ""))
+
     (opt-register
      (gnc:make-string-option
       (N_ "General")
       (N_ "Prepared for") "b"
       (N_ "Name of organization or company prepared for.")
       ""))
+
     (opt-register
      (gnc:make-simple-boolean-option
       (N_ "General")
       (N_ "Show preparer info") "c"
       (N_ "Name of organization or company.")
       #f))
+
     (opt-register
      (gnc:make-simple-boolean-option
       (N_ "General")
       (N_ "Enable Links") "d"
       (N_ "Enable hyperlinks in reports.")
       #t))
-    ;; FIXME: put this in a more sensible tab like Text or Header/Footer
+
     (opt-register
      (gnc:make-text-option
       (N_ "General")
@@ -83,12 +89,14 @@
       (N_ "Images")
       (N_ "Background Tile") "a" (N_ "Background tile for reports.")
       ""))
+
     (opt-register
      (gnc:make-pixmap-option
       (N_ "Images")
 ;;; Translators: Banner is an image like Logo.
       (N_ "Heading Banner") "b" (N_ "Banner for top of report.")
       ""))
+
     (opt-register
      (gnc:make-multichoice-option
       (N_ "Images")
@@ -102,8 +110,8 @@
                     (N_ "Align the banner in the center."))
             (vector 'right
                     (N_ "Right")
-                    (N_ "Align the banner to the right."))
-            )))
+                    (N_ "Align the banner to the right.")))))
+
     (opt-register
      (gnc:make-pixmap-option
       (N_ "Images")
@@ -191,7 +199,7 @@
 
     options))
 
-(define (footer-renderer options doc)
+(define (easy-fancy-footer-renderer options doc)
   (let* ((ssdoc (gnc:make-html-document))
          (opt-val
           (lambda (section name)
@@ -201,37 +209,28 @@
           (lambda (section name)
             (gnc:color-option->html
              (gnc:lookup-option options section name))))
-         (preparer (opt-val (N_ "General") (N_ "Preparer")))
-         (prepared-for (opt-val (N_ "General") (N_ "Prepared for")))
-         (show-preparer? (opt-val (N_ "General") (N_ "Show preparer info")))
-         (links? (opt-val (N_ "General") (N_ "Enable Links")))
-         (footer-text (opt-val (N_ "General") (N_ "Footer")))
-         (bgcolor (color-val (N_ "Colors") (N_ "Background Color")))
-         (textcolor (color-val (N_ "Colors") (N_ "Text Color")))
-         (linkcolor (color-val (N_ "Colors") (N_ "Link Color")))
-         (normal-row-color (color-val (N_ "Colors") (N_ "Table Cell Color")))
-         (alternate-row-color (color-val (N_ "Colors")
-                                         (N_ "Alternate Table Cell Color")))
+         (preparer (opt-val "General" "Preparer"))
+         (prepared-for (opt-val "General" "Prepared for"))
+         (show-preparer? (opt-val "General" "Show preparer info"))
+         (links? (opt-val "General" "Enable Links"))
+         (footer-text (opt-val "General" "Footer"))
+         (bgcolor (color-val "Colors" "Background Color"))
+         (textcolor (color-val "Colors" "Text Color"))
+         (linkcolor (color-val "Colors" "Link Color"))
+         (normal-row-color (color-val "Colors" "Table Cell Color"))
+         (alternate-row-color (color-val "Colors" "Alternate Table Cell Color"))
          (primary-subheading-color
-          (color-val (N_ "Colors")
-                     (N_ "Subheading/Subtotal Cell Color")))
+          (color-val "Colors" "Subheading/Subtotal Cell Color"))
          (secondary-subheading-color
-          (color-val (N_ "Colors")
-                     (N_ "Sub-subheading/total Cell Color")))
-         (grand-total-color (color-val (N_ "Colors")
-                                       (N_ "Grand Total Cell Color")))
-         (bgpixmap (opt-val (N_ "Images") (N_ "Background Tile")))
-         (headpixmap (opt-val (N_ "Images") (N_ "Heading Banner")))
-         (logopixmap (opt-val (N_ "Images") (N_ "Logo")))
-         (align (gnc:value->string(opt-val (N_ "Images") (N_ "Heading Alignment"))))
-         (spacing (opt-val (N_ "Tables") (N_ "Table cell spacing")))
-         (padding (opt-val (N_ "Tables") (N_ "Table cell padding")))
-         (border (opt-val (N_ "Tables") (N_ "Table border width")))
-         (headcolumn 0))
-
-    ;; center the document without elements inheriting anything
-    (gnc:html-document-add-object! ssdoc
-                                   (gnc:make-html-text "<center>"))
+          (color-val "Colors" "Sub-subheading/total Cell Color"))
+         (grand-total-color (color-val "Colors" "Grand Total Cell Color"))
+         (bgpixmap (opt-val "Images" "Background Tile"))
+         (headpixmap (opt-val "Images" "Heading Banner"))
+         (logopixmap (opt-val "Images" "Logo"))
+         (align (gnc:value->string (opt-val "Images" "Heading Alignment")))
+         (spacing (opt-val "Tables" "Table cell spacing"))
+         (padding (opt-val "Tables" "Table cell padding"))
+         (border (opt-val "Tables" "Table border width")))
 
     (gnc:html-document-set-style!
      ssdoc "body"
@@ -322,18 +321,22 @@
      ssdoc "normal-row"
      'attribute (list "bgcolor" normal-row-color)
      'tag "tr")
+
     (gnc:html-document-set-style!
      ssdoc "alternate-row"
      'attribute (list "bgcolor" alternate-row-color)
      'tag "tr")
+
     (gnc:html-document-set-style!
      ssdoc "primary-subheading"
      'attribute (list "bgcolor" primary-subheading-color)
      'tag "tr")
+
     (gnc:html-document-set-style!
      ssdoc "secondary-subheading"
      'attribute (list "bgcolor" secondary-subheading-color)
      'tag "tr")
+
     (gnc:html-document-set-style!
      ssdoc "grand-total"
      'attribute (list "bgcolor" grand-total-color)
@@ -341,27 +344,28 @@
 
     ;; don't surround marked-up links with <a> </a>
     (if (not links?)
-        (gnc:html-document-set-style! ssdoc "a" 'tag ""))
+        (gnc:html-document-set-style!
+         ssdoc "a" 'tag ""))
 
     (add-css-information-to-doc options ssdoc doc)
 
-    (let ((t (gnc:make-html-table)))
+    (let ((t (gnc:make-html-table))
+          ;; set the header column to be the 2nd when we have a logo
+          ;; do this so that when logo is not present, the document is
+          ;; perfectly centered
+          (headcolumn (if (and logopixmap (> (string-length logopixmap) 0))
+                          1 0)))
+
       ;; we don't want a bevel for this table, but we don't want
       ;; that to propagate
       (gnc:html-table-set-style!
        t "table"
        'attribute (list "border" 0)
+       'attribute (list "style" "margin-left:auto; margin-right:auto")
        'inheritable? #f)
 
-      ;; set the header column to be the 2nd when we have a logo
-      ;; do this so that when logo is not present, the document
-      ;; is perfectly centered
-      (if (and logopixmap (> (string-length logopixmap) 0))
-          (set! headcolumn 1))
-
-      (let* ((title (gnc:html-document-title doc))
-             (doc-headline (gnc:html-document-headline doc))
-             (headline (if (eq? doc-headline #f) title doc-headline)))
+      (let* ((headline (or (gnc:html-document-headline doc)
+                           (gnc:html-document-title doc))))
 
         (gnc:html-table-set-cell!
          t 1 headcolumn
@@ -382,49 +386,52 @@
 
              ;; title only
              (gnc:make-html-text
-              (gnc:html-markup-h3 headline))))
-        )
+              (gnc:html-markup-h3 headline)))))
 
       ;; only setup an image if we specified one
       (if (and logopixmap (> (string-length logopixmap) 0))
-          (begin
-            (gnc:html-table-set-cell!
-             t 0 0
-             (gnc:make-html-text
-              (gnc:html-markup-img (make-file-url logopixmap))))))
+          (gnc:html-table-set-cell!
+           t 0 0
+           (gnc:make-html-text
+            (gnc:html-markup-img (make-file-url logopixmap)))))
 
       (if (and headpixmap (> (string-length headpixmap) 0))
-          (begin
-            (gnc:html-table-set-cell!
-             t 0 headcolumn
-             (gnc:make-html-text
-              (string-append
-               "<div align=\"" align "\">"
-               "<img src=\"" (make-file-url headpixmap) "\">"
-               "</div>")))
-            )
-          (gnc:html-table-set-cell!
-           t 0 headcolumn
-           (gnc:make-html-text "&nbsp;")))
+          (let* ((div (gnc:html-markup-img (make-file-url headpixmap)))
+                 (cell (gnc:make-html-table-cell (gnc:make-html-text div))))
+            (gnc:html-table-cell-set-style! cell "td" 'attribute `("align" ,align))
+            (gnc:html-table-set-cell! t 0 headcolumn cell))
+          (gnc:html-table-set-cell! t 0 headcolumn (gnc:make-html-text " ")))
 
       (apply
        gnc:html-table-set-cell!
        t 2 headcolumn
        (gnc:html-document-objects doc))
+
       (gnc:html-document-add-object! ssdoc t)
 
-      ;; I think this is the correct place to put the footer
       (gnc:html-table-set-cell!
        t 3 headcolumn
        (gnc:make-html-text footer-text)))
-    (gnc:html-document-add-object! ssdoc (gnc:make-html-text "</center>"))
-    ;;TODO: make this a div instead of <center> (deprecated)
     ssdoc))
 
 (gnc:define-html-style-sheet
  'version 1
- 'name (N_ "Footer")
- 'renderer footer-renderer
- 'options-generator footer-options)
+ 'name (N_ "Easy")
+ 'renderer easy-fancy-footer-renderer
+ 'options-generator easy-fancy-footer-options)
 
+(gnc:define-html-style-sheet
+ 'version 1.01
+ 'name (N_ "Fancy")
+ 'renderer easy-fancy-footer-renderer
+ 'options-generator easy-fancy-footer-options)
+
+(gnc:define-html-style-sheet
+ 'version 1
+ 'name (N_ "Footer")
+ 'renderer easy-fancy-footer-renderer
+ 'options-generator easy-fancy-footer-options)
+
+(gnc:make-html-style-sheet "Easy" (N_ "Easy"))
+(gnc:make-html-style-sheet "Fancy" (N_ "Technicolor"))
 (gnc:make-html-style-sheet "Footer" (N_ "Footer"))

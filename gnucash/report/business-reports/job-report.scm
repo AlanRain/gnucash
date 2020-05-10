@@ -113,12 +113,11 @@
     (gnc:make-date-list begindate to-date ThirtyDayDelta)))
 
 
-(define (make-aging-table options query bucket-intervals reverse?)
+(define (make-aging-table options query bucket-intervals reverse? currency)
   (let ((lots (xaccQueryGetLots query QUERY-TXN-MATCH-ANY))
 	(buckets (new-bucket-vector))
 	(payments (gnc-numeric-zero))
-	(currency (gnc-default-currency)) ;XXX
-	(table (gnc:make-html-table)))
+        (table (gnc:make-html-table)))
 
     (define (in-interval this-date current-bucket)
       (< this-date current-bucket))
@@ -276,7 +275,7 @@
   (let ((txns (xaccQueryGetTransactions query QUERY-TXN-MATCH-ANY))
 	(used-columns (build-column-used options))
 	(total (gnc-numeric-zero))
-	(currency (gnc-default-currency)) ;XXX
+        (currency (xaccAccountGetCommodity acc))
 	(table (gnc:make-html-table))
 	(inv-str (gnc:option-value (gnc:lookup-option options "__reg"
 						      "inv-str")))
@@ -333,7 +332,7 @@
        (list (gnc:make-html-table-cell/size/markup
 	      1 (+ 1 (value-col used-columns))
 	      "centered-label-cell"
-	      (make-aging-table options query interval-vec reverse?)))))
+	      (make-aging-table options query interval-vec reverse? currency)))))
 
     table))
 
@@ -400,40 +399,10 @@
   (gnc:options-set-default-section gnc:*report-options* "General")
 
   gnc:*report-options*)
-	     
+
 (define (job-options-generator)
   (options-generator (list ACCT-TYPE-RECEIVABLE) GNC-OWNER-JOB
                      (_ "Invoice") #f))
-
-(define (customer-options-generator)
-  (options-generator (list ACCT-TYPE-RECEIVABLE) GNC-OWNER-CUSTOMER
-                     (_ "Invoice") #f))
-
-(define (vendor-options-generator)
-  (options-generator (list ACCT-TYPE-PAYABLE) GNC-OWNER-VENDOR
-                     (_ "Bill") #t))
-
-(define (employee-options-generator)
-  (options-generator (list ACCT-TYPE-PAYABLE) GNC-OWNER-EMPLOYEE
-                     (_ "Expense Report") #t))
-
-(define (string-expand string character replace-string)
-  (define (car-line chars)
-    (take-while (lambda (c) (not (eqv? c character))) chars))
-  (define (cdr-line chars)
-    (let ((rest (drop-while (lambda (c) (not (eqv? c character))) chars)))
-      (if (null? rest)
-          '()
-          (cdr rest))))
-  (define (line-helper chars)
-    (if (null? chars)
-        ""
-        (let ((first (car-line chars))
-              (rest (cdr-line chars)))
-          (string-append (list->string first)
-                         (if (null? rest) "" replace-string)
-                         (line-helper rest)))))
-  (line-helper (string->list string)))
 
 (define (setup-query q owner account end-date)
   (let* ((guid (gncOwnerReturnGUID owner)))
@@ -465,31 +434,15 @@
      'attribute (list "border" 0)
      'attribute (list "cellspacing" 0)
      'attribute (list "cellpadding" 0))
+
     (gnc:html-table-append-row!
      table
-     (list
-      (string-expand (gnc:owner-get-name-and-address-dep owner) #\newline "<br/>")))
+     (list (gnc:multiline-to-html-text
+            (gnc:owner-get-name-and-address-dep owner))))
+
     (gnc:html-table-append-row!
-     table
-     (list "<br/>"))
-    (gnc:html-table-set-last-row-style!
-     table "td"
-     'attribute (list "valign" "top"))
-    table))
+     table (gnc:make-html-text (gnc:html-markup-br)))
 
-(define (make-date-row! table label date)
-  (gnc:html-table-append-row!
-   table
-   (list
-    (string-append label ":&nbsp;")
-    (string-expand (qof-print-date date) #\space "&nbsp;"))))
-
-(define (make-date-table)
-  (let ((table (gnc:make-html-table)))
-    (gnc:html-table-set-style!
-     table "table"
-     'attribute (list "border" 0)
-     'attribute (list "cellpadding" 0))
     (gnc:html-table-set-last-row-style!
      table "td"
      'attribute (list "valign" "top"))
@@ -508,14 +461,12 @@
      'attribute (list "cellspacing" 0)
      'attribute (list "cellpadding" 0))
 
-    (gnc:html-table-append-row! table (list (if name name "")))
-    (gnc:html-table-append-row! table (list (string-expand
-					     (if addy addy "")
-					     #\newline "<br/>")))
-    (gnc:html-table-append-row! table (list
-				       (strftime
-					date-format
-					(gnc-localtime (current-time)))))
+    (gnc:html-table-append-row! table (list (or name "")))
+
+    (gnc:html-table-append-row! table (list (gnc:multiline-to-html-text (or addy ""))))
+
+    (gnc:html-table-append-row!
+     table (list (gnc-print-time64 (current-time) date-format)))
     table))
 
 (define (make-break! document)
@@ -572,7 +523,7 @@
 
            (gnc:html-document-set-headline!
             document (gnc:html-markup
-                      "!" 
+                      "span"
                       report-title-str ": "
                       (gnc:html-markup-anchor
 					   (gnc:job-anchor-text (gncOwnerGetJob owner))
@@ -637,40 +588,6 @@
 
     (qof-query-destroy query)
     document))
-
-(define (find-first-account type)
-  (define (find-first account num index)
-    (if (>= index num)
-	'()
-	(let* ((this-child (gnc-account-nth-child account index))
-	       (account-type (xaccAccountGetType this-child)))
-	  (if (eq? account-type type)
-	      this-child
-	      (find-first account num (+ index 1))))))
-
-  (let* ((current-root (gnc-get-current-root-account))
-	 (num-accounts (gnc-account-n-children current-root)))
-    (if (> num-accounts 0)
-	(find-first current-root num-accounts 0)
-	'())))
-
-(define (find-first-account-for-owner owner)
-  (let ((type (gncOwnerGetType (gncOwnerGetEndOwner owner))))
-    (cond
-      ((eqv? type GNC-OWNER-CUSTOMER)
-       (find-first-account ACCT-TYPE-RECEIVABLE))
-
-      ((eqv? type GNC-OWNER-VENDOR)
-       (find-first-account ACCT-TYPE-PAYABLE))
-
-      ((eqv? type GNC-OWNER-EMPLOYEE)
-       (find-first-account ACCT-TYPE-PAYABLE))
-
-      ((eqv? type GNC-OWNER-JOB)
-       (find-first-account-for-owner (gncOwnerGetEndOwner owner)))
-
-      (else
-       '()))))
 
 (gnc:define-report
  'version 1

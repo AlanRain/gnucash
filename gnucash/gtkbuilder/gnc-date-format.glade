@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.20.0 -->
+<!-- Generated with glade 3.22.1 -->
 <interface>
   <requires lib="gtk+" version="3.10"/>
   <object class="GtkListStore" id="format-liststore">
@@ -39,6 +39,9 @@
     <property name="title" translatable="yes">Date Format</property>
     <property name="resizable">False</property>
     <child>
+      <placeholder/>
+    </child>
+    <child>
       <object class="GtkGrid" id="date_format_table">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
@@ -47,7 +50,7 @@
             <property name="visible">True</property>
             <property name="can_focus">False</property>
             <property name="halign">start</property>
-            <property name="label" translatable="yes">December 31, 2000</property>
+            <property name="label">December 31, 2000</property>
           </object>
           <packing>
             <property name="left_attach">2</property>
@@ -163,7 +166,7 @@
             <property name="visible">True</property>
             <property name="can_focus">False</property>
             <property name="halign">start</property>
-            <property name="label" translatable="yes">Months:</property>
+            <property name="label" translatable="yes">Months</property>
           </object>
           <packing>
             <property name="left_attach">1</property>
@@ -175,7 +178,7 @@
             <property name="visible">True</property>
             <property name="can_focus">False</property>
             <property name="halign">start</property>
-            <property name="label" translatable="yes">Years:</property>
+            <property name="label" translatable="yes">Years</property>
           </object>
           <packing>
             <property name="left_attach">1</property>
@@ -187,7 +190,7 @@
             <property name="visible">True</property>
             <property name="can_focus">False</property>
             <property name="halign">start</property>
-            <property name="label" translatable="yes">Format:</property>
+            <property name="label" translatable="yes">Format</property>
           </object>
           <packing>
             <property name="left_attach">1</property>
@@ -200,7 +203,7 @@
             <property name="can_focus">False</property>
             <property name="halign">start</property>
             <property name="margin_right">5</property>
-            <property name="label" translatable="yes">Sample:</property>
+            <property name="label" translatable="yes">Sample</property>
           </object>
           <packing>
             <property name="left_attach">1</property>
@@ -218,7 +221,7 @@
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
                 <property name="halign">start</property>
-                <property name="label" translatable="yes">Date format:</property>
+                <property name="label" translatable="yes">Date format</property>
               </object>
               <packing>
                 <property name="expand">False</property>

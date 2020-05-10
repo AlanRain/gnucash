@@ -121,7 +121,7 @@ void gnc_tree_view_price_add_kvp_column (GncTreeViewPrice *view,
  *  thinks should possibly show.  The filter may perform any actions
  *  necessary on the price to decide whether it should be shown or
  *  not.  (I.E. Check type, placeholder status, etc.)  If the filter
- *  returns TRUE then the price wil be displayed.
+ *  returns TRUE then the price will be displayed.
  *
  *  @param price_view A pointer to an price tree view.
  *
@@ -177,7 +177,7 @@ GNCPrice * gnc_tree_view_price_get_selected_price (GncTreeViewPrice *view);
 
 /** This function selects an price in the price tree view.  All
  *  other prices will be unselected.  In addition, this function
- *  collapses the entitre tree and then expands only the path to the
+ *  collapses the entire tree and then expands only the path to the
  *  selected price, making the item easy to find.  In general, this
  *  routine only need be called when initially putting up a window
  *  containing an price tree view widget.

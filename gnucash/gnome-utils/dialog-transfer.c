@@ -72,6 +72,7 @@ struct _xferDialog
     GtkWidget *date_entry;
     GtkWidget *num_entry;
     GtkWidget *description_entry;
+    GtkWidget *notes_entry;
     GtkWidget *memo_entry;
     GtkWidget *conv_forward;
     GtkWidget *conv_reverse;
@@ -1269,6 +1270,7 @@ gnc_xfer_dialog_is_exchange_dialog (XferDialog *xferData,
     gtk_widget_set_sensitive (xferData->date_entry, FALSE);
     gtk_widget_set_sensitive (xferData->num_entry, FALSE);
     gtk_widget_set_sensitive (xferData->description_entry, FALSE);
+    gtk_widget_set_sensitive (xferData->notes_entry, FALSE);
     gtk_widget_set_sensitive (xferData->memo_entry, FALSE);
 
 
@@ -1512,7 +1514,7 @@ create_transaction(XferDialog *xferData, time64 time,
     xaccTransBeginEdit(trans);
 
     xaccTransSetCurrency(trans, xferData->from_commodity);
-    xaccTransSetDatePostedSecs(trans, time);
+    xaccTransSetDatePostedSecsNormalized(trans, time);
 
     /* Trans-Num or Split-Action set with gnc_set_num_action below per book
      * option */
@@ -1542,6 +1544,10 @@ create_transaction(XferDialog *xferData, time64 time,
     /* Set the transaction number or split action field based on book option*/
     string = gtk_entry_get_text(GTK_ENTRY(xferData->num_entry));
     gnc_set_num_action (trans, from_split, string, NULL);
+
+    /* Set the transaction notes */
+    string = gtk_entry_get_text(GTK_ENTRY(xferData->notes_entry));
+    xaccTransSetNotes(trans, string);
 
     /* Set the memo fields */
     string = gtk_entry_get_text(GTK_ENTRY(xferData->memo_entry));
@@ -1619,19 +1625,15 @@ new_price(XferDialog *xferData, time64 time)
     gnc_commodity *to = xferData->to_commodity;
     gnc_numeric value = gnc_amount_edit_get_amount(GNC_AMOUNT_EDIT(xferData->price_edit));
 
-/* We want to store currency rates such that the rate > 1 and commodity
- * prices in terms of a currency regardless of value.
- */
     value = gnc_numeric_abs(value);
-    if (gnc_commodity_is_currency(from) && gnc_commodity_is_currency(to))
-    {
-        if (value.num < value.denom)
-            value = swap_commodities(&from, &to, value);
-    }
-    else if (gnc_commodity_is_currency(from))
-            value = swap_commodities(&from, &to, value);
 
-    value = round_price (from, to, value);
+    /* store price against the non currency commodity */
+    if (gnc_commodity_is_currency (from)  && !gnc_commodity_is_currency (to))
+        value = swap_commodities (&from, &to, value);
+    /* store rate against default currency if present */
+    else if (from == gnc_default_currency() && to != gnc_default_currency())
+        value = swap_commodities (&from, &to, value);
+
     price = gnc_price_create (xferData->book);
     gnc_price_begin_edit (price);
     gnc_price_set_commodity (price, from);
@@ -1934,6 +1936,9 @@ gnc_xfer_dialog_create(GtkWidget *parent, XferDialog *xferData)
         entry = GTK_WIDGET(gtk_builder_get_object (builder, "description_entry"));
         xferData->description_entry = entry;
 
+        entry = GTK_WIDGET(gtk_builder_get_object (builder, "notes_entry"));
+        xferData->notes_entry = entry;
+
         entry = GTK_WIDGET(gtk_builder_get_object (builder, "memo_entry"));
         xferData->memo_entry = entry;
     }
@@ -2042,12 +2047,12 @@ gnc_xfer_dialog_create(GtkWidget *parent, XferDialog *xferData)
         if (use_accounting_labels)
         {
             gtk_label_set_text(GTK_LABEL(gtk_bin_get_child (GTK_BIN(xferData->amount_radio))),
-                               _("Debit Amount:"));
+                               _("Debit Amount"));
         }
         else
         {
             gtk_label_set_text(GTK_LABEL(gtk_bin_get_child (GTK_BIN(xferData->amount_radio))),
-                               _("To Amount:"));
+                               _("To Amount"));
         }
     }
 

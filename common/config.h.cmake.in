@@ -24,8 +24,8 @@
 /* Using GDK Quartz (not X11) */
 #cmakedefine GDK_QUARTZ
 
-/* Name of our gettext-domain */
-#define GETTEXT_PACKAGE "@GETTEXT_PACKAGE@"
+/* Name of our gettext-domain, needed for gi18n-lib.h */
+#define GETTEXT_PACKAGE "@PROJECT_NAME@"
 
 /* Cocoa/Nexstep/GnuStep framework */
 #cmakedefine GNC_PLATFORM_COCOA 1
@@ -57,18 +57,6 @@
 /* Most recent stable GnuCash series */
 #define GNUCASH_LATEST_STABLE_SERIES "@GNUCASH_LATEST_STABLE_SERIES@"
 
-/* GnuCash Major version number */
-#define GNUCASH_MAJOR_VERSION @GNUCASH_MAJOR_VERSION@
-
-/* GnuCash Micro version number */
-#define GNUCASH_MICRO_VERSION @GNUCASH_MICRO_VERSION@
-
-/* GnuCash Minor version number */
-#define GNUCASH_MINOR_VERSION @GNUCASH_MINOR_VERSION@
-
-/* GnuCash Nano version number */
-#define GNUCASH_NANO_VERSION @GNUCASH_NANO_VERSION@
-
 /* GnuCash earliest compatible databaseversion number */
 #define GNUCASH_RESAVE_VERSION @GNUCASH_RESAVE_VERSION@
 
@@ -77,9 +65,6 @@
 
 /* Don't use deprecated glib functions */
 #cmakedefine G_DISABLE_DEPRECATED 1
-
-/* Define to 1 if you have the `bind_textdomain_codeset' function. */
-#cmakedefine HAVE_BIND_TEXTDOMAIN_CODESET 1
 
 /* define if the Boost library is available */
 #cmakedefine HAVE_BOOST
@@ -92,9 +77,6 @@
 
 /* Define to 1 if you have the <dbi/dbi.h> header file. */
 #cmakedefine HAVE_DBI_DBI_H 1
-
-/* Define to 1 if you have the `dcgettext' function. */
-#cmakedefine HAVE_DCGETTEXT 1
 
 /* Define to 1 if you have the <dirent.h> header file. */
 #cmakedefine HAVE_DIRENT_H 1
@@ -119,9 +101,6 @@
 
 /* Define to 1 if you have the `getppid' function. */
 #cmakedefine HAVE_GETPPID 1
-
-/* Define if the GNU gettext() function is already present or preinstalled. */
-#cmakedefine HAVE_GETTEXT 1
 
 /* Define to 1 if you have the `gettimeofday' function. */
 #cmakedefine HAVE_GETTIMEOFDAY 1
@@ -279,9 +258,6 @@
 /* Define to the sub-directory where libtool stores uninstalled libraries. */
 #define LT_OBJDIR ".libs/"
 
-/* Name of package */
-#define PACKAGE "@PACKAGE@"
-
 /* Define to the address where bug reports for this package should be sent. */
 #define PACKAGE_BUGREPORT "@PACKAGE_BUGREPORT@"
 
@@ -291,14 +267,26 @@
 /* Define to the full name and version of this package. */
 #define PACKAGE_STRING "@PACKAGE_STRING@"
 
-/* Define to the one symbol short name of this package. */
-#define PACKAGE_TARNAME "@PACKAGE_TARNAME@"
-
 /* Define to the home page for this package. */
 #define PACKAGE_URL "@PACKAGE_URL@"
 
-/* Define to the version of this package. */
-#define PACKAGE_VERSION "@PACKAGE_VERSION@"
+/* Name of project */
+#define PROJECT_NAME "@PROJECT_NAME@"
+
+/* Version number of package */
+#define PROJECT_VERSION "@PROJECT_VERSION@"
+
+/* GnuCash Major version number */
+#define PROJECT_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+
+/* GnuCash Micro version number */
+#define PROJECT_VERSION_MICRO @PROJECT_VERSION_PATCH@
+
+/* GnuCash Minor version number */
+#define PROJECT_VERSION_MINOR @PROJECT_VERSION_MINOR@
+
+/* GnuCash Nano version number */
+#define PROJECT_VERSION_NANO @PROJECT_VERSION_TWEAK@
 
 /* Define to necessary symbol if this constant uses a non-standard name on
    your system. */
@@ -341,9 +329,6 @@
 #cmakedefine __EXTENSIONS__ 1
 #endif
 
-
-/* Version number of package */
-#define VERSION "@VERSION@"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */

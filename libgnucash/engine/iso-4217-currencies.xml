@@ -1734,6 +1734,7 @@
   local-symbol="MOP$"
 />
 <!-- "MRO" - "Ouguiya"
+  2018-01-01 "MRU" 10
 -->
 <currency
   isocode="MRO"
@@ -1743,7 +1744,21 @@
   namespace="ISO4217"
   exchange-code="478"
   parts-per-unit="5"
-  smallest-fraction="5"
+  smallest-fraction="100"
+  local-symbol="UM"
+/>
+<!-- "MRU" - "Ouguiya"
+;; Bug 797319: In cash parts-per-unit is still 5, but not in banking 
+-->
+<currency
+  isocode="MRU"
+  fullname="Ouguiya"
+  unitname="ouguiya"
+  partname="khoum"
+  namespace="ISO4217"
+  exchange-code="929"
+  parts-per-unit="100"
+  smallest-fraction="100"
   local-symbol="UM"
 />
 <!-- "MTL" - "Maltese Lira"
@@ -2728,8 +2743,8 @@
   partname="xu"
   namespace="ISO4217"
   exchange-code="704"
-  parts-per-unit="100"
-  smallest-fraction="100"
+  parts-per-unit="1"
+  smallest-fraction="1"
   local-symbol="₫"
 />
 <!-- "VUV" - "Vatu"

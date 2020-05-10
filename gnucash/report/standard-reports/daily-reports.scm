@@ -65,7 +65,7 @@
 (define optname-plot-height (N_ "Plot Height"))
 (define optname-sort-method (N_ "Sort Method"))
 
-;; The option-generator. The only dependance on the type of piechart
+;; The option-generator. The only dependence on the type of piechart
 ;; is the list of account types that the account selection option
 ;; accepts.
 (define (options-generator account-types)
@@ -204,10 +204,8 @@
           ;; lookup should be distributed and done when actually
           ;; needed so as to amortize the cpu time properly.
 	  (gnc:report-percent-done 1)
-	  (set! commodity-list (gnc:accounts-get-commodities 
-                                (append 
-                                 (gnc:acccounts-get-all-subaccounts accounts)
-                                 accounts)
+	  (set! commodity-list (gnc:accounts-get-commodities
+                                (gnc:accounts-and-all-descendants accounts)
                                 report-currency))
 	  (gnc:report-percent-done 5)
 	  (set! exchange-fn (gnc:case-exchange-time-fn 
@@ -226,21 +224,9 @@
           ;; add accounts to the query (include subaccounts 
           ;; if requested)
 	  (gnc:report-percent-done 25)
-          (if dosubs? 
-              (let ((subaccts '()))
-                (for-each 
-                 (lambda (acct)
-                   (let ((this-acct-subs 
-                          (gnc-account-get-descendants-sorted acct)))
-                     (if (list? this-acct-subs)
-                         (set! subaccts 
-                               (append subaccts this-acct-subs)))))
-                 accounts)
-                ;; Beware: delete-duplicates is an O(n^2)
-                ;; algorithm. More efficient method: sort the list,
-                ;; then use a linear algorithm.
-                (set! accounts
-                      (delete-duplicates (append accounts subaccts)))))
+          (if dosubs?
+              (set! accounts
+                (gnc:accounts-and-all-descendants accounts)))
 	  (gnc:report-percent-done 30)
           
           (xaccQueryAddAccountMatch query accounts QOF-GUID-MATCH-ANY QOF-QUERY-AND)

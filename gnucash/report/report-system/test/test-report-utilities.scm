@@ -23,6 +23,8 @@
   (test-get-account-balances)
   (test-monetary-adders)
   (test-make-stats-collector)
+  (test-utility-functions)
+  (test-get-account-at-dates)
   (test-end "report-utilities"))
 
 (define (NDayDelta t64 n)
@@ -44,7 +46,7 @@
          (test-day (tm:mday ts-now))
          (test-month (+ 1 (tm:mon ts-now)))
          (test-year (+ 1900 (tm:year ts-now)))
-         (end-date (gnc-dmy2time64-neutral test-day test-month test-year))
+         (end-date (gnc-dmy2time64 test-day test-month test-year))
          (start-date (NDayDelta end-date 10))
          (q-end-date (gnc-dmy2time64-end test-day test-month test-year))
          (q-start-date (gnc-dmy2time64 test-day test-month test-year))
@@ -130,8 +132,37 @@
     "('a . 2)"
     (gnc:strify (cons 'a 2)))
   (test-equal "gnc:strify cons"
-    "Proc<cons>"
-    (gnc:strify cons)))
+    "Proc<identity>"
+    (gnc:strify identity))
+  (let ((coll (gnc:make-commodity-collector)))
+    (test-equal "gnc:strify <mon-coll>"
+      "coll<()>"
+      (gnc:strify coll))
+    (coll 'add (gnc-commodity-table-lookup
+                (gnc-commodity-table-get-table
+                 (gnc-get-current-book)) "CURRENCY" "USD") 10)
+    (test-equal "gnc:strify <mon-coll $10>"
+      "coll<([$10.00])>"
+      (gnc:strify coll)))
+  (let ((coll (gnc:make-value-collector)))
+    (test-equal "gnc:strify <val-coll 0>"
+      "coll<0>"
+      (gnc:strify coll))
+    (coll 'add 10)
+    (test-equal "gnc:strify <val-coll 10>"
+      "coll<10>"
+      (gnc:strify coll)))
+
+  (let ((ht (make-hash-table)))
+    (test-equal "gnc:strify Hash()"
+      "Hash()"
+      (gnc:strify ht))
+    (hash-set! ht 'one "uno")
+    (test-equal "gnc:strify Hash(one=uno)"
+      "Hash(one=uno)"
+      (gnc:strify ht)))
+
+  (test-end "debugging tools"))
 
 (define (test-commodity-collector)
   (test-group-with-cleanup "test-commodity-collector"
@@ -193,6 +224,21 @@
         (gnc:make-gnc-monetary USD 25)
         (coll-A 'getmonetary USD #f))
 
+      (test-equal "gnc:collector+"
+        '(("USD" . 50) ("GBP" . -20))
+        (collector->list
+         (gnc:collector+ coll-A coll-A coll-B)))
+
+      (test-equal "gnc:collector- 1 arg"
+        '(("GBP" . 20) ("USD" . -25))
+        (collector->list
+         (gnc:collector- coll-A)))
+
+      (test-equal "gnc:collector- 3 args"
+        '(("USD" . 25) ("GBP" . -60))
+        (collector->list
+         (gnc:collector- coll-A coll-B coll-B)))
+
       (test-equal "gnc:commodity-collector-get-negated"
         '(("USD" . -25) ("GBP" . 20))
         (collector->list
@@ -232,7 +278,8 @@
         (list "Income" (list (cons 'type ACCT-TYPE-INCOME)))
         (list "Income-GBP" (list (cons 'type ACCT-TYPE-INCOME)
                                  (cons 'commodity (mnemonic->commodity "GBP"))))
-        (list "Expenses" (list (cons 'type ACCT-TYPE-EXPENSE)))
+        (list "Expenses" (list (cons 'type ACCT-TYPE-EXPENSE))
+              (list "Fuel"))
         (list "Liabilities" (list (cons 'type ACCT-TYPE-LIABILITY)))
         (list "Equity" (list (cons 'type ACCT-TYPE-EQUITY)))
         ))
@@ -463,6 +510,44 @@
            (gnc:get-assoc-account-balances-total account-balances)))))
     (teardown)))
 
+(define (test-utility-functions)
+
+  (define (account-lookup str)
+    (gnc-account-lookup-by-name
+     (gnc-book-get-root-account (gnc-get-current-book))
+     str))
+
+  (test-group-with-cleanup "utility functions"
+    (create-test-data)
+    (test-equal "gnc:accounts-get-commodities"
+      (list "GBP" "USD")
+      (map gnc-commodity-get-mnemonic
+           (gnc:accounts-get-commodities (gnc-account-get-descendants-sorted
+                                          (gnc-get-current-root-account))
+                                         #f)))
+
+    (test-equal "gnc:get-current-account-tree-depth"
+      5
+      (gnc:get-current-account-tree-depth))
+
+    (test-equal "gnc:acccounts-get-all-subaccounts"
+      (list (account-lookup "Fuel")
+            (account-lookup "GBP Savings"))
+      (gnc:acccounts-get-all-subaccounts
+       (list (account-lookup "Expenses")
+             (account-lookup "GBP Bank"))))
+
+    (test-equal "gnc:accounts-and-all-descendants"
+      (list (account-lookup "GBP Bank")
+            (account-lookup "GBP Savings")
+            (account-lookup "Expenses")
+            (account-lookup "Fuel"))
+      (gnc:accounts-and-all-descendants
+       (list (account-lookup "Expenses")
+             (account-lookup "GBP Bank"))))
+
+    (teardown)))
+
 (define (test-monetary-adders)
   (define (monetary->pair mon)
     (let ((comm (gnc:gnc-monetary-commodity mon))
@@ -551,3 +636,140 @@
       0
       (s 'numitems #f)))
   (test-end "gnc:make-stats-collector"))
+
+(define (monetary->pair mon)
+  (cons (gnc-commodity-get-mnemonic (gnc:gnc-monetary-commodity mon))
+        (gnc:gnc-monetary-amount mon)))
+
+(define (split->amount split)
+  (and split (xaccSplitGetAmount split)))
+
+(define (set-reconcile txn date)
+  (for-each
+   (lambda (s)
+     (xaccSplitSetReconcile s #\y)
+     (xaccSplitSetDateReconciledSecs s date))
+   (xaccTransGetSplitList txn)))
+
+(define (test-get-account-at-dates)
+  (test-group-with-cleanup "test-get-balance-at-dates"
+    (let* ((env (create-test-env))
+           (structure (list "Root" (list (cons 'type ACCT-TYPE-ASSET))
+                            (list "Asset"
+                                  (list "Bank1")
+                                  (list "Bank2")
+                                  (list "Bank3")
+                                  (list "Bank4"))
+                            (list "Income" (list (cons 'type ACCT-TYPE-INCOME)))))
+           (accounts (env-create-account-structure-alist env structure))
+           (bank1 (assoc-ref accounts "Bank1"))
+           (bank2 (assoc-ref accounts "Bank2"))
+           (bank3 (assoc-ref accounts "Bank3"))
+           (bank4 (assoc-ref accounts "Bank4"))
+           (income (assoc-ref accounts "Income"))
+           (dates (gnc:make-date-list (gnc-dmy2time64 01 01 1970)
+                                      (gnc-dmy2time64 01 04 1970)
+                                      MonthDelta)))
+
+      (test-equal "empty account"
+        '(#f #f #f #f)
+        (gnc:account-accumulate-at-dates bank1 dates))
+
+      (env-transfer env 15 01 1970 income bank1 10)
+      (env-transfer env 15 02 1970 income bank1 10)
+      (env-transfer env 15 03 1970 income bank1 10)
+      (let ((clos (env-transfer env 18 03 1970 income bank1 10)))
+        (xaccTransSetIsClosingTxn clos #t))
+
+      (env-transfer env 15 12 1969 income bank2 10)
+      (env-transfer env 17 12 1969 income bank2 10)
+      (env-transfer env 15 02 1970 income bank2 10)
+
+      (env-transfer env 15 03 1970 income bank3 10)
+
+      (env-transfer env 15 01 1970 income bank4 10)
+
+      (test-equal "1 txn in each slot"
+        '(("USD" . 0) ("USD" . 10) ("USD" . 20) ("USD" . 40))
+        (map monetary->pair (gnc:account-get-balances-at-dates bank1 dates)))
+
+      (test-equal "1 txn in each slot, tests #:split->amount to ignore closing"
+        '(("USD" . 0) ("USD" . 10) ("USD" . 20) ("USD" . 30))
+        (map monetary->pair
+             (gnc:account-get-balances-at-dates
+              bank1 dates #:split->amount
+              (lambda (s)
+                (and (not (xaccTransGetIsClosingTxn (xaccSplitGetParent s)))
+                     (xaccSplitGetAmount s))))))
+
+      (test-equal "2 txn before start, 1 in middle"
+        '(("USD" . 20) ("USD" . 20) ("USD" . 30) ("USD" . 30))
+        (map monetary->pair (gnc:account-get-balances-at-dates bank2 dates)))
+
+      (test-equal "1 txn in late slot"
+        '(("USD" . 0) ("USD" . 0) ("USD" . 0) ("USD" . 10))
+        (map monetary->pair (gnc:account-get-balances-at-dates bank3 dates)))
+
+      (test-equal "1 txn in early slot"
+        '(("USD" . 0) ("USD" . 10) ("USD" . 10) ("USD" . 10))
+        (map monetary->pair (gnc:account-get-balances-at-dates bank4 dates)))
+
+      (test-equal "1 txn in each slot"
+        '(#f 10 20 40)
+        (gnc:account-accumulate-at-dates bank1 dates))
+
+      (test-equal "2 txn before start, 1 in middle"
+        '(20 20 30 30)
+        (gnc:account-accumulate-at-dates bank2 dates))
+
+      (test-equal "1 txn in late slot"
+        '(#f #f #f 10)
+        (gnc:account-accumulate-at-dates bank3 dates))
+
+      (test-equal "1 txn in late slot, tests #:nosplit->elt"
+        '(x x x 10)
+        (gnc:account-accumulate-at-dates bank3 dates #:nosplit->elt 'x))
+
+      (test-equal "1 txn in late slot, tests #:split->elt"
+        '(#f #f #f y)
+        (gnc:account-accumulate-at-dates bank3 dates #:split->elt (const 'y)))
+
+      (test-equal "1 txn in early slot"
+        '(#f 10 10 10)
+        (gnc:account-accumulate-at-dates bank4 dates))
+
+      ;; Tests split->date sorting. note the 3 txns created below are
+      ;; initially sorted by posted_date ie txn2 < txn3 <
+      ;; txn1. However the reconciled_date sorting will be
+      ;; different. The accumulator will test both the reconciled_date
+      ;; sorting and the splits being accumulated in the correct date
+      ;; buckets.
+      (let ((txn1 (env-transfer env 15 03 1971 income bank1 2))
+            (txn2 (env-transfer env 15 01 1971 income bank1 3))
+            (txn3 (env-transfer env 15 02 1971 income bank1 11)))
+
+        (define split->reconciled
+          (let ((accum 0))
+            (lambda (s)
+              (when (eqv? (xaccSplitGetReconcile s) #\y)
+                (set! accum (+ accum (xaccSplitGetAmount s))))
+              accum)))
+
+        (define (split->reconciled-date s)
+          (if (eqv? (xaccSplitGetReconcile s) #\y)
+              (xaccSplitGetDateReconciled s)
+              +inf.0))
+
+        (set-reconcile txn1 (gnc-dmy2time64 1 4 1971))
+        (set-reconcile txn2 (gnc-dmy2time64 1 4 1971))
+        (set-reconcile txn3 (gnc-dmy2time64 1 5 1971))
+
+        (test-equal "sort by reconcile-date"
+          '(#f 5 16)
+          (gnc:account-accumulate-at-dates
+           bank1 (list (gnc-dmy2time64 1 3 1971)
+                       (gnc-dmy2time64 1 4 1971)
+                       (gnc-dmy2time64 1 5 1971))
+           #:split->date split->reconciled-date
+           #:split->elt split->reconciled))))
+    (teardown)))

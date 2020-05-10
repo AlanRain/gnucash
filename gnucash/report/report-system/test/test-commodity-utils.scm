@@ -213,10 +213,7 @@
 
 
 (define (teardown)
-  (let* ((book  (gnc-get-current-book))
-         (pricedb (gnc-pricedb-get-db book)))
-    (gnc-pricedb-destroy pricedb)
-    (gnc-clear-current-session)))
+  (gnc-clear-current-session))
 
 (define (collect collector shares value)
   ((car collector) 'add shares)
@@ -567,7 +564,7 @@
                    (cadr (assoc (gnc-dmy2time64-neutral 15 01 2012)
                                 report-list)))
 ;; Astute observers will notice that the totals include the
-;; capital gain split but not the acutal sell split on the day because the
+;; capital gain split but not the actual sell split on the day because the
 ;; capital gain price is first in the list so that's the one (assoc) finds. See
 ;; the comment at the gnc:get-commodity-totalavg-prices definition for more
 ;; about the prices from this function.
@@ -689,7 +686,39 @@
            (exchange-fn
             (gnc:make-gnc-monetary AAPL 1)
             USD
-            (gnc-dmy2time64-neutral 20 02 2014)))))
+            (gnc-dmy2time64-neutral 20 02 2014))))
+
+        (test-equal "gnc:case-exchange-time-fn weighted-average 09/09/2013"
+          307/5
+          (gnc:gnc-monetary-amount
+           (exchange-fn
+            (gnc:make-gnc-monetary AAPL 1)
+            USD
+            (gnc-dmy2time64-neutral 09 09 2013))))
+
+        (test-equal "gnc:case-exchange-time-fn weighted-average 11/08/2014"
+          9366/125
+          (gnc:gnc-monetary-amount
+           (exchange-fn
+            (gnc:make-gnc-monetary AAPL 1)
+            USD
+            (gnc-dmy2time64-neutral 11 08 2014))))
+
+        (test-equal "gnc:case-exchange-time-fn weighted-average 22/10/2015"
+          27663/325
+          (gnc:gnc-monetary-amount
+           (exchange-fn
+            (gnc:make-gnc-monetary AAPL 1)
+            USD
+            (gnc-dmy2time64-neutral 22 10 2015))))
+
+        (test-equal "gnc:case-exchange-time-fn weighted-average 24/10/2015"
+          27663/325
+          (gnc:gnc-monetary-amount
+           (exchange-fn
+            (gnc:make-gnc-monetary AAPL 1)
+            USD
+            (gnc-dmy2time64-neutral 24 10 2015)))))
 
       (let ((exchange-fn (gnc:case-exchange-time-fn
                           'average-cost USD

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.20.0 -->
+<!-- Generated with glade 3.22.1 -->
 <interface>
   <requires lib="gtk+" version="3.10"/>
   <object class="GtkDialog" id="transfer_dialog">
@@ -8,6 +8,9 @@
     <property name="title" translatable="yes">Transfer Funds</property>
     <property name="type_hint">dialog</property>
     <signal name="response" handler="gnc_xfer_dialog_response_cb" swapped="no"/>
+    <child>
+      <placeholder/>
+    </child>
     <child internal-child="vbox">
       <object class="GtkBox" id="vbox">
         <property name="visible">True</property>
@@ -21,7 +24,7 @@
             <property name="layout_style">end</property>
             <child>
               <object class="GtkButton" id="button">
-                <property name="label">_Cancel</property>
+                <property name="label" translatable="yes">_Cancel</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="can_default">True</property>
@@ -36,7 +39,7 @@
             </child>
             <child>
               <object class="GtkButton" id="button1">
-                <property name="label">_OK</property>
+                <property name="label" translatable="yes">_OK</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="can_default">True</property>
@@ -109,7 +112,7 @@
                         <property name="can_focus">False</property>
                         <property name="halign">start</property>
                         <property name="margin_left">12</property>
-                        <property name="label" translatable="yes">Amount:</property>
+                        <property name="label" translatable="yes">Amount</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
@@ -136,7 +139,7 @@
                         <property name="can_focus">False</property>
                         <property name="halign">start</property>
                         <property name="margin_left">12</property>
-                        <property name="label" translatable="yes">Date:</property>
+                        <property name="label" translatable="yes">Date</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
@@ -164,7 +167,7 @@
                         <property name="can_focus">False</property>
                         <property name="halign">start</property>
                         <property name="margin_left">12</property>
-                        <property name="label" translatable="yes">Num:</property>
+                        <property name="label" translatable="yes">Num</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
@@ -189,7 +192,7 @@
                         <property name="can_focus">False</property>
                         <property name="halign">start</property>
                         <property name="margin_left">12</property>
-                        <property name="label" translatable="yes">Description:</property>
+                        <property name="label" translatable="yes">Description</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
@@ -216,7 +219,32 @@
                         <property name="can_focus">False</property>
                         <property name="halign">start</property>
                         <property name="margin_left">12</property>
-                        <property name="label" translatable="yes">Memo:</property>
+                        <property name="label" translatable="yes">Memo</property>
+                      </object>
+                      <packing>
+                        <property name="left_attach">0</property>
+                        <property name="top_attach">5</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkEntry" id="memo_entry">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="hexpand">True</property>
+                        <property name="activates_default">True</property>
+                      </object>
+                      <packing>
+                        <property name="left_attach">1</property>
+                        <property name="top_attach">5</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="label13">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="halign">start</property>
+                        <property name="margin_left">12</property>
+                        <property name="label" translatable="yes">Notes</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
@@ -224,7 +252,7 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkEntry" id="memo_entry">
+                      <object class="GtkEntry" id="notes_entry">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="hexpand">True</property>
@@ -278,7 +306,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="halign">start</property>
-                        <property name="label" translatable="yes">Currency:</property>
+                        <property name="label" translatable="yes">Currency</property>
                         <property name="justify">center</property>
                       </object>
                       <packing>
@@ -366,7 +394,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="halign">start</property>
-                        <property name="label" translatable="yes">Currency:</property>
+                        <property name="label" translatable="yes">Currency</property>
                         <property name="justify">center</property>
                       </object>
                       <packing>
@@ -509,7 +537,7 @@
                     <property name="column_spacing">12</property>
                     <child>
                       <object class="GtkRadioButton" id="price_radio">
-                        <property name="label" translatable="yes">Exchange Rate:</property>
+                        <property name="label" translatable="yes">Exchange Rate</property>
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="receives_default">False</property>
@@ -549,7 +577,7 @@
                     </child>
                     <child>
                       <object class="GtkRadioButton" id="amount_radio">
-                        <property name="label" translatable="yes">To Amount:</property>
+                        <property name="label" translatable="yes">To Amount</property>
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="receives_default">False</property>

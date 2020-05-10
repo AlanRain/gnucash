@@ -56,10 +56,12 @@ enum
     TARGET_COMPOUND_TEXT
 };
 
+#define MIN_BUTT_WIDTH 20 // minimum size for a button excluding border
+
 static GtkBoxClass *gnc_item_edit_parent_class;
 
 static GtkToggleButtonClass *gnc_item_edit_tb_parent_class;
-
+static void gnc_item_edit_destroying(GtkWidget *this, gpointer data);
 static void
 gnc_item_edit_tb_init (GncItemEditTb *item_edit_tb)
 {
@@ -111,12 +113,19 @@ gnc_item_edit_tb_get_preferred_width (GtkWidget *widget,
 {
     GncItemEditTb *tb = GNC_ITEM_EDIT_TB (widget);
     GncItemEdit *item_edit = GNC_ITEM_EDIT(tb->sheet->item_editor);
+    GtkStyleContext *context = gtk_widget_get_style_context (GTK_WIDGET(tb));
+    GtkBorder border;
     gint x, y, w, h = 2, width = 0;
     gnc_item_edit_get_pixel_coords (GNC_ITEM_EDIT (item_edit), &x, &y, &w, &h);
     width = ((h - 2)*2)/3;
-    if (width < 22) // minimum size for a button
-        width = 22;
+
+    gtk_style_context_get_border (context, GTK_STATE_FLAG_NORMAL, &border);
+
+    if (width < MIN_BUTT_WIDTH + border.left + border.right)
+        width = MIN_BUTT_WIDTH + border.left + border.right;
+
     *minimal_width = *natural_width = width;
+    item_edit->button_width = width;
 }
 
 static void
@@ -220,6 +229,9 @@ gnc_item_edit_get_pixel_coords (GncItemEdit *item_edit,
     SheetBlock *block;
     int xd, yd;
 
+    if (sheet == NULL)
+        return;
+
     block = gnucash_sheet_get_block (sheet, item_edit->virt_loc.vcell_loc);
     if (block == NULL)
         return;
@@ -248,6 +260,8 @@ gnc_item_edit_update (GncItemEdit *item_edit)
 {
     gint x = 0, y = 0, w, h;
 
+    if (item_edit == NULL || item_edit->sheet == NULL)
+        return FALSE;
     gnc_item_edit_get_pixel_coords (item_edit, &x, &y, &w, &h);
     gtk_layout_move (GTK_LAYOUT(item_edit->sheet),
                      GTK_WIDGET(item_edit), x, y);
@@ -319,6 +333,7 @@ gnc_item_edit_init (GncItemEdit *item_edit)
     item_edit->popup_user_data = NULL;
 
     item_edit->style = NULL;
+    item_edit->button_width = MIN_BUTT_WIDTH;
 
     gnc_virtual_location_init(&item_edit->virt_loc);
 }
@@ -561,7 +576,8 @@ draw_arrow_cb (GtkWidget *widget, cairo_t *cr, gpointer data)
     gint height = gtk_widget_get_allocated_height (widget);
     gint size;
 
-    gtk_render_background (context, cr, 0, 0, width, height);
+    // allow room for a border
+    gtk_render_background (context, cr, 2, 2, width - 4, height - 4);
 
     gtk_style_context_add_class (context, GTK_STYLE_CLASS_ARROW);
 
@@ -653,7 +669,6 @@ gnc_item_edit_set_property (GObject *object,
                             GParamSpec *pspec)
 {
     GncItemEdit *item_edit = GNC_ITEM_EDIT (object);
-
     switch (param_id)
     {
     case PROP_SHEET:
@@ -720,7 +735,9 @@ gnc_item_edit_class_init (GncItemEditClass *gnc_item_edit_class)
     widget_class->get_preferred_height = gnc_item_edit_get_preferred_height;
 }
 
-
+/* FIXME: This way of initializing GObjects is obsolete. We should be
+ * using G_DECLARE_FINAL_TYPE instead of rolling _get_type by hand.
+ */
 GType
 gnc_item_edit_get_type (void)
 {
@@ -795,6 +812,25 @@ gnc_item_edit_get_padding_border (GncItemEdit *item_edit, Sides side)
     default:
         return 2;
     }
+}
+
+gint
+gnc_item_edit_get_button_width (GncItemEdit *item_edit)
+{
+    if (item_edit)
+    {
+        if (gtk_widget_is_visible (GTK_WIDGET(item_edit->popup_toggle.tbutton)))
+            return item_edit->button_width;
+        else
+        {
+            GtkStyleContext *context = gtk_widget_get_style_context (GTK_WIDGET(item_edit->popup_toggle.tbutton));
+            GtkBorder border;
+
+            gtk_style_context_get_border (context, GTK_STATE_FLAG_NORMAL, &border);
+            return MIN_BUTT_WIDTH + border.left + border.right;
+        }
+    }
+    return MIN_BUTT_WIDTH + 2; // add the default border
 }
 
 static gboolean
@@ -898,13 +934,22 @@ gnc_item_edit_new (GnucashSheet *sheet)
                       item_edit->popup_toggle.tbutton);
 
     /* The button needs to be packed into a vertical box so that the height and position
-     * can be controlled in ealier than Gtk3.20 versions */
+     * can be controlled in earlier than Gtk3.20 versions */
     gtk_box_pack_start (GTK_BOX(vb), item_edit->popup_toggle.ebox,
                         FALSE, FALSE, 0);
 
     gtk_box_pack_start (GTK_BOX(item_edit), vb, FALSE, FALSE, 0);
     gtk_widget_show_all(GTK_WIDGET(item_edit));
+    g_signal_connect(G_OBJECT(item_edit), "destroy",
+                     G_CALLBACK(gnc_item_edit_destroying), NULL);
     return GTK_WIDGET(item_edit);
+}
+
+static void
+gnc_item_edit_destroying(GtkWidget *item_edit, gpointer data)
+{
+    while (g_idle_remove_by_data((gpointer)item_edit))
+        continue;
 }
 
 static void

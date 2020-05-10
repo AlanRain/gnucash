@@ -25,6 +25,7 @@
  * @brief GUI handling for bi-import plugin
  * @author Copyright (C) 2009 Sebastian Held <sebastian.held@gmx.de>
  * @author Mike Evans <mikee@saxicola.co.uk>
+ * @author Rob Laan <rob.laan@chello.nl>
  */
 
 #ifdef HAVE_CONFIG_H
@@ -124,7 +125,7 @@ gnc_plugin_bi_import_showGUI (GtkWindow *parent)
 
     gui->book = gnc_get_current_book();
 
-    gui->regexp = g_string_new ( "^(\\x{FEFF})?(?<id>[^;]*);(?<date_opened>[^;]*);(?<owner_id>[^;]*);(?<billing_id>[^;]*);?(?<notes>[^;]*);?(?<date>[^;]*);?(?<desc>[^;]*);?(?<action>[^;]*);?(?<account>[^;]*);?(?<quantity>[^;]*);?(?<price>[^;]*);?(?<disc_type>[^;]*);?(?<disc_how>[^;]*);?(?<discount>[^;]*);?(?<taxable>[^;]*);?(?<taxincluded>[^;]*);?(?<tax_table>[^;]*);(?<date_posted>[^;]*);(?<due_date>[^;]*);(?<account_posted>[^;]*);(?<memo_posted>[^;]*);(?<accu_splits>[^;]*)$");
+    gui->regexp = g_string_new ( "^(\\x{FEFF})?(?<id>[^;]*);(?<date_opened>[^;]*);(?<owner_id>[^;]*);(?<billing_id>[^;]*);(?<notes>[^;]*);(?<date>[^;]*);(?<desc>[^;]*);(?<action>[^;]*);(?<account>[^;]*);(?<quantity>[^;]*);(?<price>[^;]*);(?<disc_type>[^;]*);(?<disc_how>[^;]*);(?<discount>[^;]*);(?<taxable>[^;]*);(?<taxincluded>[^;]*);(?<tax_table>[^;]*);(?<date_posted>[^;]*);(?<due_date>[^;]*);(?<account_posted>[^;]*);(?<memo_posted>[^;]*);(?<accu_splits>[^;]*)$");
 
     // create model and bind to view
     gui->store = gtk_list_store_new (N_COLUMNS,
@@ -137,30 +138,30 @@ gnc_plugin_bi_import_showGUI (GtkWindow *parent)
   column = gtk_tree_view_column_new_with_attributes (description, renderer, "text", column_id, NULL); \
   gtk_tree_view_column_set_resizable (column, TRUE); \
   gtk_tree_view_append_column (GTK_TREE_VIEW (gui->tree_view), column);
-    CREATE_COLUMN ("id", ID);
-    CREATE_COLUMN ("date__opened", DATE_OPENED);
-    CREATE_COLUMN ("owner__id", OWNER_ID);
-    CREATE_COLUMN ("billing__id", BILLING_ID);
-    CREATE_COLUMN ("notes", NOTES);
+    CREATE_COLUMN (_("ID"), ID);
+    CREATE_COLUMN (_("Date-opened"), DATE_OPENED);
+    CREATE_COLUMN (_("Owner-ID"), OWNER_ID);
+    CREATE_COLUMN (_("Billing-ID"), BILLING_ID);
+    CREATE_COLUMN (_("Notes"), NOTES);
 
-    CREATE_COLUMN ("date", DATE);
-    CREATE_COLUMN ("desc", DESC);
-    CREATE_COLUMN ("action", ACTION);
-    CREATE_COLUMN ("account", ACCOUNT);
-    CREATE_COLUMN ("quantity", QUANTITY);
-    CREATE_COLUMN ("price", PRICE);
-    CREATE_COLUMN ("disc__type", DISC_TYPE);
-    CREATE_COLUMN ("disc__how", DISC_HOW);
-    CREATE_COLUMN ("discount", DISCOUNT);
-    CREATE_COLUMN ("taxable", TAXABLE);
-    CREATE_COLUMN ("taxincluded", TAXINCLUDED);
-    CREATE_COLUMN ("tax__table", TAX_TABLE);
+    CREATE_COLUMN (_("Date"), DATE);
+    CREATE_COLUMN (_("Description"), DESC);
+    CREATE_COLUMN (_("Action"), ACTION);
+    CREATE_COLUMN (_("Account"), ACCOUNT);
+    CREATE_COLUMN (_("Quantity"), QUANTITY);
+    CREATE_COLUMN (_("Price"), PRICE);
+    CREATE_COLUMN (_("Disc-type"), DISC_TYPE);
+    CREATE_COLUMN (_("Disc-how"), DISC_HOW);
+    CREATE_COLUMN (_("Discount"), DISCOUNT);
+    CREATE_COLUMN (_("Taxable"), TAXABLE);
+    CREATE_COLUMN (_("Taxincluded"), TAXINCLUDED);
+    CREATE_COLUMN (_("Tax-table"), TAX_TABLE);
 
-    CREATE_COLUMN ("date__posted", DATE_POSTED);
-    CREATE_COLUMN ("due__date", DUE_DATE);
-    CREATE_COLUMN ("account__posted", ACCOUNT_POSTED);
-    CREATE_COLUMN ("memo__posted", MEMO_POSTED);
-    CREATE_COLUMN ("accu__splits", ACCU_SPLITS);
+    CREATE_COLUMN (_("Date-posted"), DATE_POSTED);
+    CREATE_COLUMN (_("Due-date"), DUE_DATE);
+    CREATE_COLUMN (_("Account-posted"), ACCOUNT_POSTED);
+    CREATE_COLUMN (_("Memo-posted"), MEMO_POSTED);
+    CREATE_COLUMN (_("Accu-splits"), ACCU_SPLITS);
 
     gui->component_id = gnc_register_gui_component ("dialog-bi-import-gui",
                         NULL,
@@ -216,12 +217,13 @@ gnc_bi_import_gui_ok_cb (GtkWidget *widget, gpointer data)
     if (res == RESULT_OK)
     {
         gnc_bi_import_fix_bis (gui->store, &n_fixed, &n_deleted, info, gui->type);
-        gnc_bi_import_create_bis (gui->store, gui->book, &n_invoices_created, &n_invoices_updated,
+        gnc_bi_import_create_bis (gui->store, gui->book, &n_invoices_created, &n_invoices_updated, &n_deleted,
                                   gui->type, gui->open_mode, info, gui->parent);
         if (info->len > 0)
             gnc_info_dialog (GTK_WINDOW (gui->dialog), "%s", info->str);
         g_string_free( info, TRUE );
-        gnc_info_dialog (GTK_WINDOW (gui->dialog), _("Import results:\n%i lines were ignored\n%i lines imported:\n   %u fixes\n   %u ignored (not fixable)\n\n   %u created\n   %u updated (based on id)"), stats.n_ignored, stats.n_imported, n_fixed, n_deleted, n_invoices_created, n_invoices_updated);
+        gnc_info_dialog (GTK_WINDOW (gui->dialog), _("Import:\n- rows ignored: %i\n- rows imported: %i\n\nValidation & processing:\n- rows fixed: %u\n- rows ignored: %u\n- invoices created: %u\n- invoices updated: %u"),
+                         stats.n_ignored, stats.n_imported, n_fixed, n_deleted, n_invoices_created, n_invoices_updated);
         if (stats.n_ignored > 0)
             gnc_info2_dialog (gui->dialog, _("These lines were ignored during import"), stats.ignored_lines->str);
 
@@ -309,7 +311,7 @@ void gnc_bi_import_gui_option1_cb (GtkWidget *widget, gpointer data)
     BillImportGui *gui = data;
     if (!gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(widget) ))
         return;
-    g_string_assign (gui->regexp, "^(\\x{FEFF})?(?<id>[^;]*);(?<date_opened>[^;]*);(?<owner_id>[^;]*);(?<billing_id>[^;]*);?(?<notes>[^;]*);?(?<date>[^;]*);?(?<desc>[^;]*);?(?<action>[^;]*);?(?<account>[^;]*);?(?<quantity>[^;]*);?(?<price>[^;]*);?(?<disc_type>[^;]*);?(?<disc_how>[^;]*);?(?<discount>[^;]*);?(?<taxable>[^;]*);?(?<taxincluded>[^;]*);?(?<tax_table>[^;]*);(?<date_posted>[^;]*);(?<due_date>[^;]*);(?<account_posted>[^;]*);(?<memo_posted>[^;]*);(?<accu_splits>[^;]*)$");
+    g_string_assign (gui->regexp, "^(\\x{FEFF})?(?<id>[^;]*);(?<date_opened>[^;]*);(?<owner_id>[^;]*);(?<billing_id>[^;]*);(?<notes>[^;]*);(?<date>[^;]*);(?<desc>[^;]*);(?<action>[^;]*);(?<account>[^;]*);(?<quantity>[^;]*);(?<price>[^;]*);(?<disc_type>[^;]*);(?<disc_how>[^;]*);(?<discount>[^;]*);(?<taxable>[^;]*);(?<taxincluded>[^;]*);(?<tax_table>[^;]*);(?<date_posted>[^;]*);(?<due_date>[^;]*);(?<account_posted>[^;]*);(?<memo_posted>[^;]*);(?<accu_splits>[^;]*)$");
     gnc_bi_import_gui_filenameChanged_cb (gui->entryFilename, gui);
 }
 
@@ -319,7 +321,7 @@ void gnc_bi_import_gui_option2_cb (GtkWidget *widget, gpointer data)
     BillImportGui *gui = data;
     if (!gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(widget) ))
         return;
-    g_string_assign (gui->regexp, "^(\\x{FEFF})?(?<id>[^,]*),(?<date_opened>[^,]*),(?<owner_id>[^,]*),(?<billing_id>[^,]*),?(?<notes>[^,]*),?(?<date>[^,]*),?(?<desc>[^,]*),?(?<action>[^,]*),?(?<account>[^,]*),?(?<quantity>[^,]*),?(?<price>[^,]*),?(?<disc_type>[^,]*),?(?<disc_how>[^,]*),?(?<discount>[^,]*),?(?<taxable>[^,]*),?(?<taxincluded>[^,]*),?(?<tax_table>[^,]*),(?<date_posted>[^,]*),(?<due_date>[^,]*),(?<account_posted>[^,]*),(?<memo_posted>[^,]*),(?<accu_splits>[^,]*)$");
+    g_string_assign (gui->regexp, "^(\\x{FEFF})?(?<id>[^,]*),(?<date_opened>[^,]*),(?<owner_id>[^,]*),(?<billing_id>[^,]*),(?<notes>[^,]*),(?<date>[^,]*),(?<desc>[^,]*),(?<action>[^,]*),(?<account>[^,]*),(?<quantity>[^,]*),(?<price>[^,]*),(?<disc_type>[^,]*),(?<disc_how>[^,]*),(?<discount>[^,]*),(?<taxable>[^,]*),(?<taxincluded>[^,]*),(?<tax_table>[^,]*),(?<date_posted>[^,]*),(?<due_date>[^,]*),(?<account_posted>[^,]*),(?<memo_posted>[^,]*),(?<accu_splits>[^,]*)$");
     gnc_bi_import_gui_filenameChanged_cb (gui->entryFilename, gui);
 }
 
@@ -423,14 +425,14 @@ gnc_input_dialog (GtkWidget *parent, const gchar *title, const gchar *msg, const
 
     // add a label
     label = gtk_label_new (msg);
-    gtk_container_add (GTK_CONTAINER (content_area), label);
+    gtk_box_pack_start(GTK_BOX(content_area), label, FALSE, FALSE, 0);
 
     // add a textview
     view = gtk_text_view_new ();
     gtk_text_view_set_wrap_mode (GTK_TEXT_VIEW (view), GTK_WRAP_WORD_CHAR);
     buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (view));
     gtk_text_buffer_set_text (buffer, default_input, -1);
-    gtk_container_add (GTK_CONTAINER (content_area), view);
+    gtk_box_pack_start(GTK_BOX(content_area), view, TRUE, TRUE, 0);
 
     // run the dialog
     gtk_widget_show_all (dialog);
@@ -480,11 +482,10 @@ gnc_info2_dialog (GtkWidget *parent, const gchar *title, const gchar *msg)
 
     // add a scroll area
     scrolledwindow = gtk_scrolled_window_new (NULL, NULL);
-    gtk_container_add (GTK_CONTAINER (content_area), scrolledwindow);
+    gtk_box_pack_start(GTK_BOX(content_area), scrolledwindow, TRUE, TRUE, 0);
 
     // add a textview
     view = gtk_text_view_new ();
-//    gtk_text_view_set_wrap_mode (GTK_TEXT_VIEW (view), GTK_WRAP_WORD_CHAR);
     gtk_text_view_set_editable (GTK_TEXT_VIEW (view), FALSE);
     buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (view));
     gtk_text_buffer_set_text (buffer, msg, -1);

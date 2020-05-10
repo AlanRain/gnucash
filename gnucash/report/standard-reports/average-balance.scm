@@ -149,6 +149,121 @@
         (_ "Loss") (_ "Profit") ))
 
 
+(define (analyze-splits splits balances daily-dates interval-dates
+                        internal-included exchange-fn report-currency)
+  ;; this is a tight loop. start with: daily-balances & daily-dates,
+  ;; interval-dates, and the splitlist. traverse the daily balances
+  ;; and splitlist until we cross an interval date boundary, then
+  ;; summarize the interval-balances and interval-amounts
+  (define work-to-do (length splits))
+  (let loop ((results '())
+             (interval-bals '())
+             (interval-amts '())
+             (splits splits)
+             (work-done 0)
+             (daily-balances (cdr balances))
+             (daily-dates (cdr daily-dates))
+             (interval-start (car interval-dates))
+             (interval-dates (cdr interval-dates)))
+
+    (cond
+     ;; daily-dates finished. job done. add details for last-interval
+     ;; which must be handled separately, and return to caller
+     ((null? daily-dates)
+      (reverse
+       (cons (list
+              (qof-print-date interval-start)
+              (qof-print-date (car interval-dates))
+              (/ (apply + interval-bals)
+                 (length interval-bals))
+              (apply max interval-bals)
+              (apply min interval-bals)
+              (apply + (filter positive? interval-amts))
+              (- (apply + (filter negative? interval-amts)))
+              (apply + interval-amts))
+             results)))
+
+     ;; first daily-date > first interval-date -- crossed interval
+     ;; boundary -- add interval details to results
+     ((> (car daily-dates) (car interval-dates))
+      (gnc:report-percent-done (* 100 (/ work-done work-to-do)))
+      (loop (cons (list
+                   (qof-print-date interval-start)
+                   (qof-print-date (decdate (car interval-dates)
+                                            DayDelta))
+                   (/ (apply + interval-bals)
+                      (length interval-bals))
+                   (apply max interval-bals)
+                   (apply min interval-bals)
+                   (apply + (filter positive? interval-amts))
+                   (- (apply + (filter negative? interval-amts)))
+                   (apply + interval-amts))
+                  results)    ;process interval amts&bals
+            '()               ;reset interval-bals
+            '()               ;and interval-amts
+            splits
+            work-done
+            daily-balances
+            daily-dates
+            (car interval-dates)
+            (cdr interval-dates)))
+
+     ;; we're still within interval, no more splits left within
+     ;; current interval. add daily balance to interval.
+     ((or (null? splits)
+          (> (xaccTransGetDate (xaccSplitGetParent (car splits)))
+             (car interval-dates)))
+      (loop results
+            (cons (car daily-balances) interval-bals)
+            interval-amts
+            splits
+            work-done
+            (cdr daily-balances)
+            (cdr daily-dates)
+            interval-start
+            interval-dates))
+
+     ;; we're still within interval. 'internal' is disallowed; there
+     ;; are at least 2 splits remaining, both from the same
+     ;; transaction. skip them. NOTE we should really expand this
+     ;; conditional whereby all splits are internal, however the
+     ;; option is labelled as 2-splits only. best maintain behaviour.
+     ((and (not internal-included)
+           (pair? (cdr splits))
+           (= 2 (xaccTransCountSplits (xaccSplitGetParent (car splits))))
+           (equal? (xaccSplitGetParent (car splits))
+                   (xaccSplitGetParent (cadr splits))))
+      (loop results
+            interval-bals
+            interval-amts ;interval-amts unchanged
+            (cddr splits) ;skip two splits.
+            (+ 2 work-done)
+            daily-balances
+            daily-dates
+            interval-start
+            interval-dates))
+
+     ;; we're still within interval. there are splits remaining. add
+     ;; split details to interval-amts
+     (else
+      (loop results
+            interval-bals
+            (cons (gnc:gnc-monetary-amount
+                   (exchange-fn
+                    (gnc:make-gnc-monetary
+                     (xaccAccountGetCommodity
+                      (xaccSplitGetAccount (car splits)))
+                     (xaccSplitGetAmount (car splits)))
+                    report-currency
+                    (car interval-dates)))
+                  interval-amts) ;add split amt to list
+            (cdr splits)         ;and loop to next split
+            (1+ work-done)
+            daily-balances
+            daily-dates
+            interval-start
+            interval-dates)))))
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Renderer
   ;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -168,7 +283,8 @@
          (enddate (gnc:time64-end-day-time 
                    (gnc:date-option-absolute-time 
                     (get-option gnc:pagename-general optname-to-date))))
-         (stepsize (gnc:deltasym-to-delta (get-option gnc:pagename-general optname-stepsize)))
+         (stepsize (gnc:deltasym-to-delta
+                    (get-option gnc:pagename-general optname-stepsize)))
          (report-currency (get-option gnc:pagename-general 
                                       optname-report-currency))
          (price-source (get-option gnc:pagename-general
@@ -177,11 +293,9 @@
          (internal-included (not (get-option gnc:pagename-accounts optname-internal)))
          (accounts   (get-option gnc:pagename-accounts (N_ "Accounts")))
          (dosubs?    (get-option gnc:pagename-accounts optname-subacct))
-         (accounts (append accounts
-                           (if dosubs?
-                               (filter (lambda (acc) (not (member acc accounts)))
-                                       (gnc:acccounts-get-all-subaccounts accounts))
-                               '())))
+         (accounts (if dosubs?
+                       (gnc:accounts-and-all-descendants accounts)
+                       accounts))
          (plot-type  (get-option gnc:pagename-display (N_ "Plot Type")))
          (show-plot? (get-option gnc:pagename-display (N_ "Show plot")))
          (show-table? (get-option gnc:pagename-display (N_ "Show table")))
@@ -242,132 +356,39 @@
           (let* ((splits (qof-query-run query))
                  (daily-dates (gnc:make-date-list begindate enddate DayDelta))
                  (interval-dates (gnc:make-date-list begindate enddate stepsize))
+
+                 ;; for accounts-balances generation
+                 (work-to-do (length accounts))
                  (accounts-balances (map
-                                     (lambda (acc)
+                                     (lambda (work-done acc)
+                                       (gnc:report-percent-done
+                                        (* 100 (/ work-done work-to-do)))
                                        (gnc:account-get-balances-at-dates
                                         acc daily-dates))
+                                     (iota work-to-do)
                                      accounts))
+
+                 ;; for daily-balances generation
+                 (work-to-do (length daily-dates))
                  (balances (map
-                            (lambda (date accounts-balance)
+                            (lambda (work-done date accounts-balance)
+                              (gnc:report-percent-done (* 100 (/ work-done work-to-do)))
                               (gnc:gnc-monetary-amount
                                (gnc:sum-collector-commodity
                                 (apply gnc:monetaries-add accounts-balance)
                                 report-currency
                                 (lambda (monetary target-curr)
                                   (exchange-fn monetary target-curr date)))))
+                            (iota work-to-do)
                             daily-dates
                             (apply zip accounts-balances))))
+
             (qof-query-destroy query)
 
-            ;; this is a complicated tight loop. start with:
-            ;; daily-balances & daily-dates, interval-dates, and the
-            ;; splitlist. traverse the daily balances and splitlist
-            ;; until we cross an interval date boundary, then
-            ;; summarize the interval-balances and interval-amounts
-            (let loop ((results '())
-                       (interval-bals '())
-                       (interval-amts '())
-                       (splits splits)
-                       (daily-balances (cdr balances))
-                       (daily-dates (cdr daily-dates))
-                       (interval-start (car interval-dates))
-                       (interval-dates (cdr interval-dates)))
-              (cond
-
-               ;; daily-dates finished. job done. add details for
-               ;; last-interval which must be handled separately.
-               ((null? daily-dates)
-                (set! data
-                  (reverse!
-                   (cons (list
-                          (qof-print-date interval-start)
-                          (qof-print-date (car interval-dates))
-                          (/ (apply + interval-bals)
-                             (length interval-bals))
-                          (apply max interval-bals)
-                          (apply min interval-bals)
-                          (apply + (filter positive? interval-amts))
-                          (- (apply + (filter negative? interval-amts)))
-                          (apply + interval-amts))
-                         results))))
-
-               ;; first daily-date > first interval-date -- crossed
-               ;; interval boundary -- add interval details to results
-               ((> (car daily-dates) (car interval-dates))
-                (loop (cons (list
-                             (qof-print-date interval-start)
-                             (qof-print-date (decdate (car interval-dates)
-                                                      DayDelta))
-                             (/ (apply + interval-bals)
-                                (length interval-bals))
-                             (apply max interval-bals)
-                             (apply min interval-bals)
-                             (apply + (filter positive? interval-amts))
-                             (- (apply + (filter negative? interval-amts)))
-                             (apply + interval-amts))
-                            results)    ;process interval amts&bals
-                      '()               ;reset interval-bals
-                      '()               ;and interval-amts
-                      splits
-                      daily-balances
-                      daily-dates
-                      (car interval-dates)
-                      (cdr interval-dates)))
-
-               ;; we're still within interval, no more splits left
-               ;; within current interval. add daily balance to
-               ;; interval.
-               ((or (null? splits)
-                    (> (xaccTransGetDate (xaccSplitGetParent (car splits)))
-                       (car interval-dates)))
-                (loop results
-                      (cons (car daily-balances) interval-bals)
-                      interval-amts
-                      splits
-                      (cdr daily-balances)
-                      (cdr daily-dates)
-                      interval-start
-                      interval-dates))
-
-               ;; we're still within interval. 'internal' is
-               ;; disallowed; there are at least 2 splits remaining,
-               ;; both from the same transaction. skip them. NOTE we
-               ;; should really expand this conditional whereby all
-               ;; splits are internal, however the option is labelled
-               ;; as 2-splits only. best maintain current behaviour.
-               ((and (not internal-included)
-                     (pair? (cdr splits))
-                     (= 2 (xaccTransCountSplits (xaccSplitGetParent (car splits))))
-                     (equal? (xaccSplitGetParent (car splits))
-                             (xaccSplitGetParent (cadr splits))))
-                (loop results
-                      interval-bals
-                      interval-amts ;interval-amts unchanged
-                      (cddr splits) ;skip two splits.
-                      daily-balances
-                      daily-dates
-                      interval-start
-                      interval-dates))
-
-               ;; we're still within interval. there are splits
-               ;; remaining. add split details to interval-amts
-               (else
-                (loop results
-                      interval-bals
-                      (cons (gnc:gnc-monetary-amount
-                             (exchange-fn
-                              (gnc:make-gnc-monetary
-                               (xaccAccountGetCommodity
-                                (xaccSplitGetAccount (car splits)))
-                               (xaccSplitGetAmount (car splits)))
-                              report-currency
-                              (car interval-dates)))
-                            interval-amts) ;add split amt to list
-                      (cdr splits)         ;and loop to next split
-                      daily-balances
-                      daily-dates
-                      interval-start
-                      interval-dates)))))
+            (unless (null? splits)
+              (set! data
+                (analyze-splits splits balances daily-dates interval-dates
+                                internal-included exchange-fn report-currency))))
 
           (gnc:report-percent-done 70)
           
@@ -465,7 +486,8 @@
           ;; make a table (optionally)
 	  (gnc:report-percent-done 80)
           (if show-table? 
-              (let ((table (gnc:make-html-table)))
+              (let ((table (gnc:make-html-table))
+                    (scu (gnc-commodity-get-fraction report-currency)))
                 (gnc:html-table-set-col-headers!
                  table columns)
                 (for-each
@@ -477,7 +499,14 @@
                      (list "date-cell" "date-cell"
                            "number-cell" "number-cell" "number-cell"
                            "number-cell" "number-cell" "number-cell")
-                     row)))
+                     (cons* (car row)
+                            (cadr row)
+                            (map
+                             (lambda (amt)
+                               (gnc:make-gnc-monetary
+                                report-currency
+                                (gnc-numeric-convert amt scu GNC-RND-ROUND)))
+                             (cddr row))))))
                  data)
                 (gnc:html-document-add-object! document table))))
 

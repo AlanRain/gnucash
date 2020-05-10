@@ -133,6 +133,8 @@ gnc_header_draw_offscreen (GncHeader *header)
             virt_loc.phys_col_offset = j;
 
             cd = gnucash_style_get_cell_dimensions (style, i, j);
+            if (!cd) continue;
+            
             height = cd->pixel_height;
             if (header->in_resize && (j == header->resize_col))
                 width = header->resize_col_width;
@@ -320,6 +322,8 @@ pointer_on_resize_line (GncHeader *header, int x, G_GNUC_UNUSED int y, int *col)
     for (j = 0; j < style->ncols; j++)
     {
         cd = gnucash_style_get_cell_dimensions (style, 0, j);
+        if (!cd) continue;
+        
         pixels += cd->pixel_width;
         if (x >= pixels - 1 && x <= pixels + 1)
             on_the_line = TRUE;
@@ -346,8 +350,8 @@ find_resize_col (GncHeader *header, int col)
     /* skip to the right over zero-width columns */
     while ((col + 1 < style->ncols) &&
             (cd = gnucash_style_get_cell_dimensions (style, 0, col + 1)) &&
-            (cd->pixel_width == 0))
-        col++;
+            cd && (cd->pixel_width == 0))
+        ++col;
 
     /* now go back left till we have a resizable column */
     while (col >= start)
@@ -449,6 +453,7 @@ gnc_header_event (GtkWidget *widget, GdkEvent *event)
 
             cd = gnucash_style_get_cell_dimensions
                  (header->style, 0, col);
+            if (!cd) break;
 
             header->in_resize = TRUE;
             header->resize_col = col;

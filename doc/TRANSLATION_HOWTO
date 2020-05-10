@@ -41,17 +41,17 @@ out there and are eager to help.  Go to the #gnucash channel at
 #gnucash".
 
 The main gnucash web site is loaded with information:
-http://www.gnucash.org/
+https://www.gnucash.org/
 
 The GNU Translation Project is another way to submit translations:
-http://www.iro.umontreal.ca/contrib/po/HTML/
+https://translationproject.org/html/welcome.html
 
 ==============================================================================
 2) Get the source
 
 The first thing to do is to download the latest STABLE branch of gnucash.
 This could be easily done by visiting
-http://www.gnucash.org/pub/gnucash/sources/stable/
+https://www.gnucash.org/pub/gnucash/sources/stable/
 and grab the latest stable source package.
 
 Please do not use the HEAD branch from SVN, since the text in the HEAD branch 
@@ -100,7 +100,7 @@ email address.
 4) Building, Installing and running GnuCash
 
 Before starting to work on your translations, it is suggested that you 
-buiild the gnucash source code.  This way you can get your system set up 
+build the gnucash source code.  This way you can get your system set up 
 correctly with all the development packages you need.  It is a good idea
 to actually run gnucash with your new translations because it is quite 
 helpful to see the phrases in the context of the running program.
@@ -157,7 +157,7 @@ Now, open your language's glossary file and translate it completely.
 ==============================================================================
 6) Initial processing of the translation file
 
-Before you begin actualy translation work, you should update the gnucash.pot 
+Before you begin actual translation work, you should update the gnucash.pot 
 file and use this to update your .po file.  This process will insure that 
 you have the latest translatable strings.
 
@@ -174,10 +174,10 @@ If your language file does exist, update it using the msgmerge program:
 
 /usr/bin/msgmerge -o XXXX.po XXXX.po gnucash.pot
 
-The top of the .po file should be editted somewhat.  The comments at the 
+The top of the .po file should be edited somewhat.  The comments at the 
 top of the file should be changed to be current:
 
-# Messages in Deutsch für GnuCash
+# Messages in Deutsch fï¿½r GnuCash
 # Copyright (C) 1999 Free Software Foundation, Inc.
 # Jan-Uwe Finck <Jan-Uwe.Finck@bigfoot.de>, 1999.
 
@@ -191,9 +191,9 @@ Make sure that the header of your .po file contains this line:
 
 Finally.  You are ready to do some translating!
 
-There are many transaltion editors, KBabel, for example, works well for 
+There are many translation editors, KBabel, for example, works well for 
 GnuCash.  Some Editors are noted here:
-http://translationproject.org/html/software.html
+https://translationproject.org/html/software.html
 
 If you are familiar with a text editor, e.g. vim or emacs, you can also 
 manually edit the .po files.  Here is an example of translating some text 
@@ -213,7 +213,7 @@ msgid ""
 "The GnuCash personal finance manager.\n"
 "The GNU way to manage your money!"
 msgstr ""
-"GnuCash: Ihr persönlicher Finanzmanager.\n"
+"GnuCash: Ihr persï¿½nlicher Finanzmanager.\n"
 "Der GNU-Weg, ihr Geld zu verwalten !"
 
 You should read through every translation in the .po file at least once.  
@@ -235,7 +235,7 @@ msgid ""
 "\n"
 "%s"
 msgstr ""
-"Es gab einen Fehler beim Öffnen der Datei. \n"
+"Es gab einen Fehler beim ï¿½ffnen der Datei. \n"
 "     %s."
 
 You need to correct the translated string and remove the 'fuzzy' keyword.
@@ -249,20 +249,20 @@ msgid ""
 "\n"
 "%s"
 msgstr ""
-"Es gab einen Fehler beim Öffnen der Datei. \n"
+"Es gab einen Fehler beim ï¿½ffnen der Datei. \n"
 "     %s."
 
 Notice that the comment "c-format" was not removed.  That is correct, you 
 should leave that.
 
 When you see the comment "c-format", it means that the format codes in the 
-tranlatable string are referring to C formatting codes.  So, '%s' means text, 
+translatable string are referring to C formatting codes.  So, '%s' means text, 
 '%d' means an integer, etc...
 
 ==============================================================================
 8) Testing and submitting your translations
 
-You must check that your new translations are programatically correct (ie: 
+You must check that your new translations are programmatically correct (ie: 
 that there are no unclosed quotes, etc).  To do this, use the msgfmt program
 
 /usr/bin/msgfmt -c --statistics XXXX.po

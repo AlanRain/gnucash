@@ -28,6 +28,7 @@
 (define-module (gnucash report owner-report))
 
 (use-modules (srfi srfi-1))
+(use-modules (srfi srfi-8))
 (use-modules (gnucash gnc-module))
 (use-modules (gnucash utilities))        ; for gnc:debug
 (use-modules (gnucash gettext))
@@ -241,7 +242,7 @@
        (let* ((bal (gnc-lot-get-balance lot))
           (invoice (gncInvoiceGetInvoiceFromLot lot))
               (date (if (eq? date-type 'postdate)
-               (gncInvoiceGetDatePostedTT invoice) 
+               (gncInvoiceGetDatePosted invoice)
                (gncInvoiceGetDateDue invoice)))
               )
          
@@ -284,11 +285,11 @@
              (qof-print-date due-date)
              "")))
     (if (num-col column-vector)
-        (addto! row-contents num))
+        (addto! row-contents (gnc:html-string-sanitize num)))
     (if (type-col column-vector)
         (addto! row-contents type-str))
     (if (memo-col column-vector)
-        (addto! row-contents memo))
+        (addto! row-contents (gnc:html-string-sanitize memo)))
     (if (sale-col column-vector)
         (addto! row-contents
          (gnc:make-html-table-cell/markup "number-cell" sale)))
@@ -548,10 +549,9 @@
    gnc:*report-options* gnc:pagename-general
    optname-from-date optname-to-date "a")
   ;; Use a default report date of 'today'
-  (gnc:option-set-value (gnc:lookup-option gnc:*report-options*
-                                           gnc:pagename-general
-                                           optname-to-date)
-                        (cons 'relative 'today))
+  (gnc:option-set-default-value
+   (gnc:lookup-option gnc:*report-options* gnc:pagename-general optname-to-date)
+   (cons 'relative 'today))
 
   (gnc:register-inv-option
    (gnc:make-simple-boolean-option
@@ -596,7 +596,7 @@
   (gnc:register-inv-option
    (gnc:make-simple-boolean-option
     (N_ "Display Columns") debit-header
-    "had" (N_ "Display a period debits column?") #t))
+    "had" (N_ "Display the period debits column?") #t))
 
   (gnc:register-inv-option
    (gnc:make-simple-boolean-option
@@ -626,24 +626,6 @@
 
 (define (employee-options-generator)
   (options-generator (list ACCT-TYPE-PAYABLE) GNC-OWNER-EMPLOYEE #t))
-
-(define (string-expand string character replace-string)
-  (define (car-line chars)
-    (take-while (lambda (c) (not (eqv? c character))) chars))
-  (define (cdr-line chars)
-    (let ((rest (drop-while (lambda (c) (not (eqv? c character))) chars)))
-      (if (null? rest)
-          '()
-          (cdr rest))))
-  (define (line-helper chars)
-    (if (null? chars)
-        ""
-        (let ((first (car-line chars))
-              (rest (cdr-line chars)))
-          (string-append (list->string first)
-                         (if (null? rest) "" replace-string)
-                         (line-helper rest)))))
-  (line-helper (string->list string)))
 
 (define (setup-query q owner account end-date)
   (let* ((guid (gncOwnerReturnGUID (gncOwnerGetEndOwner owner))))
@@ -675,24 +657,25 @@
      'attribute (list "border" 0)
      'attribute (list "cellspacing" 0)
      'attribute (list "cellpadding" 0))
+
     (gnc:html-table-append-row!
-     table
-     (list
-      (string-expand (gnc:owner-get-name-and-address-dep owner) #\newline "<br/>")))
+     table (gnc:multiline-to-html-text (gnc:owner-get-name-and-address-dep owner)))
+
     (gnc:html-table-append-row!
-     table
-     (list "<br/>"))
+     table (gnc:make-html-text (gnc:html-markup-br)))
+
     (gnc:html-table-set-last-row-style!
      table "td"
      'attribute (list "valign" "top"))
+
     table))
 
 (define (make-date-row! table label date)
   (gnc:html-table-append-row!
    table
    (list
-    (string-append label ":&nbsp;")
-    (string-expand (qof-print-date date) #\space "&nbsp;"))))
+    (string-append label ": ")
+    (qof-print-date date))))
 
 (define (make-date-table)
   (let ((table (gnc:make-html-table)))
@@ -718,14 +701,14 @@
      'attribute (list "cellspacing" 0)
      'attribute (list "cellpadding" 0))
 
-    (gnc:html-table-append-row! table (list (if name name "")))
-    (gnc:html-table-append-row! table (list (string-expand
-                         (if addy addy "")
-                         #\newline "<br/>")))
-    (gnc:html-table-append-row! table (list
-                       (strftime
-                    date-format
-                    (gnc-localtime (gnc:get-today)))))
+    (gnc:html-table-append-row! table (list (or name "")))
+
+    (gnc:html-table-append-row!
+     table (list (gnc:multiline-to-html-text (or addy ""))))
+
+    (gnc:html-table-append-row!
+     table (list (gnc-print-time64 (gnc:get-today) date-format)))
+
     table))
 
 (define (make-break! document)
@@ -750,8 +733,8 @@
      (end-date (gnc:time64-end-day-time 
                (gnc:date-option-absolute-time
                (opt-val gnc:pagename-general optname-to-date))))
-     (book (gnc-account-get-book account))
-     (date-format (if (not (null? book)) (gnc:options-fancy-date book)))
+     (book (gnc-get-current-book))
+     (date-format (gnc:options-fancy-date book))
      (type (opt-val "__reg" "owner-type"))
      (owner-descr (owner-string type))
      (date-type (opt-val gnc:pagename-general optname-date-driver))
@@ -779,7 +762,7 @@
 
         (gnc:html-document-set-headline!
          document (gnc:html-markup
-                   "!" 
+                   "span"
                    (doctype-str type)
                    " " (_ "Report:") " "
                    (gnc:html-markup-anchor
@@ -820,36 +803,30 @@
         (qof-query-destroy query)))))
    document))
 
-(define (find-first-account type)
-  (define (find-first account num index)
-    (if (>= index num)
-    '()
-    (let* ((this-child (gnc-account-nth-child account index))
-           (account-type (xaccAccountGetType this-child)))
-      (if (eq? account-type type)
-          this-child
-          (find-first account num (+ index 1))))))
+(define* (find-first-account type #:key currency)
+  (or (find
+       (lambda (acc)
+         (and (eqv? type (xaccAccountGetType acc))
+              (or (not currency)
+                  (gnc-commodity-equiv currency (xaccAccountGetCommodity acc)))))
+       (gnc-account-get-descendants-sorted (gnc-get-current-root-account)))
+      '()))
 
-  (let* ((current-root (gnc-get-current-root-account))
-         (num-accounts (gnc-account-n-children current-root)))
-    (if (> num-accounts 0)
-        (find-first current-root num-accounts 0)
-        '())))
-
-(define (find-first-account-for-owner owner)
+(define* (find-first-account-for-owner owner #:key currency)
   (let ((type (gncOwnerGetType (gncOwnerGetEndOwner owner))))
     (cond
       ((eqv? type GNC-OWNER-CUSTOMER)
-       (find-first-account ACCT-TYPE-RECEIVABLE))
+       (find-first-account ACCT-TYPE-RECEIVABLE #:currency currency))
 
       ((eqv? type GNC-OWNER-VENDOR)
-       (find-first-account ACCT-TYPE-PAYABLE))
+       (find-first-account ACCT-TYPE-PAYABLE #:currency currency))
 
       ((eqv? type GNC-OWNER-EMPLOYEE)
-       (find-first-account ACCT-TYPE-PAYABLE))
+       (find-first-account ACCT-TYPE-PAYABLE #:currency currency))
 
       ((eqv? type GNC-OWNER-JOB)
-       (find-first-account-for-owner (gncOwnerGetEndOwner owner)))
+       (find-first-account-for-owner (gncOwnerGetEndOwner owner)
+                                     #:currency currency))
 
       (else
        '()))))

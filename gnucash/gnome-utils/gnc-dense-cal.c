@@ -288,7 +288,7 @@ gnc_dense_cal_init(GncDenseCal *dcal)
 
     {
         GtkWidget *hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
-        GtkWidget *label = gtk_label_new (_("View:"));
+        GtkWidget *label = gtk_label_new (_("View"));
 
         gtk_box_set_homogeneous (GTK_BOX (hbox), FALSE);
         gtk_widget_set_halign (label, GTK_ALIGN_END);
@@ -1330,7 +1330,7 @@ gnc_dense_cal_motion_notify(GtkWidget *widget,
     if (!dcal->showPopup)
         return FALSE;
 
-    /* As per http://www.gtk.org/tutorial/sec-eventhandling.html */
+    /* As per https://www.gtk.org/tutorial/sec-eventhandling.html */
     if (event->is_hint)
     {
 #if GTK_CHECK_VERSION(3,20,0)
@@ -1939,10 +1939,13 @@ gdc_model_added_cb(GncDenseCalModel *model, guint added_tag, gpointer user_data)
 static void
 gdc_model_update_cb(GncDenseCalModel *model, guint update_tag, gpointer user_data)
 {
-    GncDenseCal *cal = GNC_DENSE_CAL(user_data);
-    g_debug("gdc_model_update_cb update for tag [%d]\n", update_tag);
-    gdc_mark_remove(cal, update_tag, FALSE);
-    gdc_add_tag_markings(cal, update_tag);
+    GncDenseCal *cal = GNC_DENSE_CAL (user_data);
+    gint num_marks = 0;
+    g_debug ("gdc_model_update_cb update for tag [%d]\n", update_tag);
+    num_marks = gnc_dense_cal_model_get_instance_count (cal->model, update_tag);
+    // We need to redraw if there are no mark, to ensure they're all erased.
+    gdc_mark_remove (cal, update_tag, num_marks==0);
+    gdc_add_tag_markings (cal, update_tag);
 
 }
 

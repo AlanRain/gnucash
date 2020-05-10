@@ -212,7 +212,7 @@ if (WIN32)
   qof-win32.cpp
   ../../borrowed/libc/strptime.c
   )
-endif (WIN32)
+endif()
 
 # Add dependency on config.h
 set_source_files_properties (${engine_SOURCES} PROPERTIES OBJECT_DEPENDS ${CONFIG_H})
@@ -237,7 +237,7 @@ else()
   set(BCRYPT "")
 endif()
 
-target_link_libraries(gncmod-engine gnc-core-utils gnc-module ${Boost_DATE_TIME_LIBRARIES}  ${Boost_REGEX_LIBRARIES} ${BCRYPT} ${REGEX_LDFLAGS} ${GMODULE_LDFLAGS} ${GLIB2_LDFLAGS} ${GOBJECT_LDFLAGS} ${GUILE_LDFLAGS})
+target_link_libraries(gncmod-engine gnc-core-utils gnc-module ${Boost_DATE_TIME_LIBRARIES}  ${Boost_REGEX_LIBRARIES}  ${ICU4C_I18N_LDFLAGS} ${BCRYPT} ${REGEX_LDFLAGS} ${GMODULE_LDFLAGS} ${GLIB2_LDFLAGS} ${GOBJECT_LDFLAGS} ${GUILE_LDFLAGS})
 
 target_compile_definitions (gncmod-engine PRIVATE -DG_LOG_DOMAIN=\"gnc.engine\")
 
@@ -281,7 +281,7 @@ set (engine_SCHEME_1
 set(BACKEND_DEPENDS gncmod-backend-xml)
 if (WITH_SQL)
     list(APPEND BACKEND_DEPENDS gncmod-backend-dbi)
-endif(WITH_SQL)
+endif()
 
 set(GUILE_DEPENDS
   ${BACKEND_DEPENDS}
@@ -321,7 +321,7 @@ set(engine_EXTRA_DIST
 
 if (NOT WIN32)
   list(APPEND engine_EXTRA_DIST qof-win32.cpp)
-endif (NOT WIN32)
+endif()
 set_local_dist(engine_DIST_local CMakeLists.txt ${engine_SOURCES} ${engine_HEADERS}
                      ${engine_noinst_HEADERS} ${engine_SCHEME_0} ${engine_SCHEME_1} ${engine_EXTRA_DIST})
 set(engine_DIST ${engine_DIST_local} ${engine_test_core_DIST} ${test_engine_DIST} PARENT_SCOPE)

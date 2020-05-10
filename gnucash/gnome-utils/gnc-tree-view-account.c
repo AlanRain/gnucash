@@ -115,7 +115,7 @@ typedef struct GncTreeViewAccountPrivate
 } GncTreeViewAccountPrivate;
 
 #define GNC_TREE_VIEW_ACCOUNT_GET_PRIVATE(o)  \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_TREE_VIEW_ACCOUNT, GncTreeViewAccountPrivate))
+   ((GncTreeViewAccountPrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_TREE_VIEW_ACCOUNT))
 
 
 /************************************************************/
@@ -903,9 +903,7 @@ gnc_tree_view_account_new_with_root (Account *root, gboolean show_root)
                                             NULL);
 
     gnc_tree_view_add_toggle_column(view, _("Placeholder"),
-                                    /* Translators: This string has a context prefix; the translation
-                                        must only contain the part after the | character. */
-                                    Q_("Column letter for 'Placeholder'|P"),
+				    C_("Column header for 'Placeholder'", "P"),
                                     "placeholder",
                                     GNC_TREE_MODEL_ACCOUNT_COL_PLACEHOLDER,
                                     GNC_TREE_VIEW_COLUMN_VISIBLE_ALWAYS,
@@ -1078,6 +1076,17 @@ gnc_tree_view_account_count_children (GncTreeViewAccount *view,
     return num_children;
 }
 
+void
+gnc_tree_view_account_clear_model_cache (GncTreeViewAccount *view)
+{
+    GtkTreeModel *model, *f_model, *s_model;
+
+    s_model = gtk_tree_view_get_model (GTK_TREE_VIEW(view));
+    f_model = gtk_tree_model_sort_get_model (GTK_TREE_MODEL_SORT(s_model));
+    model = gtk_tree_model_filter_get_model (GTK_TREE_MODEL_FILTER(f_model));
+
+    gnc_tree_model_account_clear_cache (GNC_TREE_MODEL_ACCOUNT(model));
+}
 
 /************************************************************/
 /*            Account Tree View Filter Functions            */
@@ -1565,7 +1574,7 @@ gnc_tree_view_account_set_selected_accounts (GncTreeViewAccount *view,
 }
 
 /*
- * Selects all sub-accounts of an acccount.
+ * Selects all sub-accounts of an account.
  */
 void
 gnc_tree_view_account_select_subaccounts (GncTreeViewAccount *view,

@@ -16,11 +16,6 @@ file (WRITE LINGUAS "${ALL_LINGUAS}")
 set (CATALOGS "")
 set (BUILD_CATALOGS "")
 
-set(CMAKE_COMMAND_TMP "")
-if (${CMAKE_VERSION} VERSION_GREATER 3.1)
-  set(CMAKE_COMMAND_TMP ${CMAKE_COMMAND} -E env)
-endif()
-
 set(po_SOURCES "")
 file (WRITE LINGUAS "")
 foreach(lingua ${ALL_LINGUAS})
@@ -37,9 +32,10 @@ foreach(lingua ${ALL_LINGUAS})
   list(APPEND CATALOGS ${_OUTPUT_FILE})
   add_custom_command(
       OUTPUT ${_OUTPUT_FILE}
-      COMMAND ${CMAKE_COMMAND_TMP}
+      COMMAND ${CMAKE_COMMAND} -E env
         ${GETTEXT_MSGFMT_EXECUTABLE}
             -o ${_OUTPUT_FILE} ${CMAKE_CURRENT_SOURCE_DIR}/${lingua}.po
+      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${lingua}.po
   )
   set(_BUILD_FILE_DIR ${DATADIR_BUILD}/locale/${lingua}/LC_MESSAGES)
   make_directory(${_BUILD_FILE_DIR})
@@ -77,9 +73,10 @@ function(make_gnucash_potfiles)
   file (GLOB_RECURSE FILES_IN RELATIVE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/*.c ${CMAKE_SOURCE_DIR}/*.cpp
     ${CMAKE_SOURCE_DIR}/*.glade ${CMAKE_SOURCE_DIR}/*.desktop.in.in
-    ${CMAKE_SOURCE_DIR}/*.gschema.xml.in ${CMAKE_SOURCE_DIR}/*.appdata.xml.in
+    ${CMAKE_SOURCE_DIR}/*.gschema.xml.in ${CMAKE_SOURCE_DIR}/*.appdata.xml.in.in
     ${CMAKE_SOURCE_DIR}/*.keys.in ${CMAKE_SOURCE_DIR}/*.scm
     ${CMAKE_SOURCE_DIR}/*/qofbookslots.h
+    ${CMAKE_SOURCE_DIR}/*/gnc-commodity.h
   )
 
   # Only consider files in a selection of the source directories and
@@ -94,7 +91,7 @@ function(make_gnucash_potfiles)
         AND
         NOT ${path} MATCHES "/[.][^/]*$")
         list (APPEND GOOD_FILES ${path})
-    endif ()
+    endif()
   endforeach (path)
 
   # Remove the paths that we have marked as explicitly skipped
@@ -135,7 +132,7 @@ function(make_gnucash_potfiles)
   set(gnucash_pot_depends ${POTFILE_DEPS}  CACHE INTERNAL "List of files with translatable strings. If any of these change, gnucash.pot should be regenerated")
 endfunction()
 
-if(BUILDING_FROM_VCS)
+if(BUILD_GNUCASH_POT)
 
   make_gnucash_potfiles()
 
@@ -145,16 +142,16 @@ if(BUILDING_FROM_VCS)
 
   if (${XGETTEXT} STREQUAL "XGETTEXT-NOTFOUND")
     message(FATAL_ERROR "Can't find the 'xgettext' program.")
-  endif ()
+  endif()
 
   add_custom_command(OUTPUT gnucash.pot
         COMMAND ${CMAKE_COMMAND}
            -D TOP_SRC_DIR=${CMAKE_SOURCE_DIR}
            -D PO_SRC_DIR=${CMAKE_CURRENT_SOURCE_DIR}
            -D PO_BIN_DIR=${CMAKE_CURRENT_BINARY_DIR}
-           -D PACKAGE=${PACKAGE}
+           -D PROJECT_NAME=${PROJECT_NAME}
            -D PACKAGE_NAME=${PACKAGE_NAME}
-           -D PACKAGE_VERSION=${PACKAGE_VERSION}
+           -D PROJECT_VERSION=${PROJECT_VERSION}
            -D XGETTEXT=${XGETTEXT}
            -P ${CMAKE_CURRENT_SOURCE_DIR}/gnucash-pot.cmake
         DEPENDS ${gnucash_pot_depends}

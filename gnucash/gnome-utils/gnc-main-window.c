@@ -235,7 +235,7 @@ GNC_DEFINE_TYPE_WITH_CODE(GncMainWindow, gnc_main_window, GTK_TYPE_WINDOW,
 		                               gnc_window_main_window_init))
 
 #define GNC_MAIN_WINDOW_GET_PRIVATE(o)  \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_MAIN_WINDOW, GncMainWindowPrivate))
+   ((GncMainWindowPrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_MAIN_WINDOW))
 
 /** This data structure maintains information about one action groups
  *  that has been installed in this window. */
@@ -2514,7 +2514,7 @@ gnc_main_window_class_init (GncMainWindowClass *klass)
      *
      * The "page_changed" signal is emitted when a new page is
      * selected in the notebook of a GncMainWindow.  This can be
-     * used to to adjust menu actions based upon which page is
+     * used to adjust menu actions based upon which page is
      * currently displayed in a window.
      */
     main_window_signals[PAGE_CHANGED] =
@@ -2794,6 +2794,9 @@ gnc_main_window_disconnect (GncMainWindow *window,
                                          G_CALLBACK(gnc_main_window_popup_menu_cb), page);
     g_signal_handlers_disconnect_by_func(G_OBJECT(page->notebook_page),
                                          G_CALLBACK(gnc_main_window_button_press_cb), page);
+
+    // Remove the page_changed signal callback
+    gnc_plugin_page_disconnect_page_changed (GNC_PLUGIN_PAGE(page));
 
     /* Disconnect the page and summarybar from the window */
     priv = GNC_MAIN_WINDOW_GET_PRIVATE(window);
@@ -3154,7 +3157,7 @@ gnc_main_window_merge_actions (GncMainWindow *window,
     priv = GNC_MAIN_WINDOW_GET_PRIVATE(window);
     entry = g_new0 (MergedActionEntry, 1);
     entry->action_group = gtk_action_group_new (group_name);
-    gtk_action_group_set_translation_domain (entry->action_group, GETTEXT_PACKAGE);
+    gtk_action_group_set_translation_domain (entry->action_group, PROJECT_NAME);
     gtk_action_group_add_actions (entry->action_group, actions, n_actions, data);
     if (toggle_actions != NULL && n_toggle_actions > 0)
     {
@@ -3284,6 +3287,8 @@ gnc_main_window_update_tab_position (gpointer prefs, gchar *pref, gpointer user_
     GncMainWindow *window;
     GtkPositionType position = GTK_POS_TOP;
     GncMainWindowPrivate *priv;
+
+    g_return_if_fail (GNC_IS_MAIN_WINDOW(user_data));
 
     window = GNC_MAIN_WINDOW(user_data);
 
@@ -3602,7 +3607,7 @@ gnc_main_window_setup_window (GncMainWindow *window)
 
     /* Create menu and toolbar information */
     priv->action_group = gtk_action_group_new ("MainWindowActions");
-    gtk_action_group_set_translation_domain (priv->action_group, GETTEXT_PACKAGE);
+    gtk_action_group_set_translation_domain (priv->action_group, PROJECT_NAME);
     gtk_action_group_add_actions (priv->action_group, gnc_menu_actions,
                                   gnc_menu_n_actions, window);
     gtk_action_group_add_toggle_actions (priv->action_group,
@@ -3710,7 +3715,7 @@ gnc_quartz_shutdown (GtkosxApplication *theApp, gpointer data)
     /* Do Nothing. It's too late. */
 }
 /* Should quit responds to NSApplicationBlockTermination; returning
- * TRUE means "don't terminate", FALSE means "do terminate". 
+ * TRUE means "don't terminate", FALSE means "do terminate".
  */
 static gboolean
 gnc_quartz_should_quit (GtkosxApplication *theApp, GncMainWindow *window)
@@ -4322,6 +4327,9 @@ gnc_main_window_cmd_window_move_page (GtkAction *action, GncMainWindow *window)
     notebook = GTK_NOTEBOOK (priv->notebook);
     tab_widget = gtk_notebook_get_tab_label (notebook, page->notebook_page);
     menu_widget = gtk_notebook_get_menu_label (notebook, page->notebook_page);
+
+    // Remove the page_changed signal callback
+    gnc_plugin_page_disconnect_page_changed (GNC_PLUGIN_PAGE(page));
 
     /* Ref the page components, then remove it from its old window */
     g_object_ref(page);

@@ -4,7 +4,7 @@
 ;; These are TXF codes and a brief description of each. See taxtxf.scm
 ;; and txf-export-help.scm
 ;;
-;; See also http://www.turbotax.com/txf/
+;; See also https://www.turbotax.com/txf/ [DEAD LINK]
 ;;
 ;; Updated Jan 2019 to include codes for version 42, although new codes not
 ;;   implemented yet because data not available
@@ -41,6 +41,7 @@
 
 
 (use-modules (gnucash app-utils))
+(use-modules (srfi srfi-2))
 
 (define txf-tax-entity-types
   (list
@@ -51,11 +52,8 @@
    (cons 'Other #("None" "No Income Tax Options Provided"))))
 
 (define (gnc:tax-type-txf-get-code-info tax-entity-types type-code index)
-  (if (assv type-code tax-entity-types)
-      (let ((tax-entity-type (assv type-code tax-entity-types)))
-           (and tax-entity-type
-                (vector-ref (cdr tax-entity-type) index)))
-      #f))
+  (and-let* ((tax-entity-type (assv-ref tax-entity-types type-code)))
+    (vector-ref tax-entity-type index)))
 
 (define (gnc:txf-get-tax-entity-type type-code)
   (gnc:tax-type-txf-get-code-info txf-tax-entity-types type-code 0))
@@ -78,57 +76,37 @@
   (gnc:txf-get-code-info categories code 4 tax-entity-type))
 (define (gnc:txf-get-category-key categories code tax-entity-type)
   (gnc:txf-get-code-info categories code 5 tax-entity-type))
+
 (define (gnc:txf-get-line-data categories code tax-entity-type)
-  (if (assv (string->symbol tax-entity-type) categories)
-      (let* ((tax-entity-codes (cdr (assv (string->symbol tax-entity-type)
-                                          categories)))
-             (category (if (assv code tax-entity-codes)
-                           (assv code tax-entity-codes)
-                           #f)))
-            (if (or (not category) (< (vector-length (cdr category)) 7))
-                #f
-                (gnc:txf-get-code-info categories code 6 tax-entity-type)))
-      #f))
+  (and-let* ((sym (string->symbol tax-entity-type))
+             (tax-entity-codes (assv-ref categories sym))
+             (category (assv-ref tax-entity-codes code))
+             ((>= (vector-length category) 7)))
+    (gnc:txf-get-code-info categories code 6 tax-entity-type)))
+
 (define (gnc:txf-get-last-year categories code tax-entity-type)
-  (if (assv (string->symbol tax-entity-type) categories)
-      (let* ((tax-entity-codes (cdr (assv (string->symbol tax-entity-type)
-                                          categories)))
-             (category (if (assv code tax-entity-codes)
-                           (assv code tax-entity-codes)
-                           #f)))
-            (if (or (not category) (< (vector-length (cdr category)) 8))
-                #f
-                (gnc:txf-get-code-info categories code 7 tax-entity-type)))
-      #f))
+  (and-let* ((sym (string->symbol tax-entity-type))
+             (tax-entity-codes (assv-ref categories sym))
+             (category (assv-ref tax-entity-codes code))
+             ((>= (vector-length category) 8)))
+    (gnc:txf-get-code-info categories code 7 tax-entity-type)))
 
 (define (gnc:txf-get-help categories code)
-  (let ((pair (assv code txf-help-strings)))
-    (if pair
-        (cdr pair)
-        (_ "No help available.") )))
+  (or (assv-ref txf-help-strings code)
+      (_ "No help available.")))
 
 (define (gnc:txf-get-codes categories tax-entity-type)
-  (if (assv (string->symbol tax-entity-type) categories)
-      (let ((tax-entity-codes (cdr (assv (string->symbol tax-entity-type)
-                                                                 categories))))
-           (map car tax-entity-codes))
-      #f))
+  (and-let* ((sym (string->symbol tax-entity-type))
+             (tax-entity-codes (assv-ref categories sym)))
+    (map car tax-entity-codes)))
 
 (define (gnc:txf-get-code-info categories code index tax-entity-type)
-  (if (or (assv (string->symbol tax-entity-type) categories)
-          (eqv? tax-entity-type ""))
-      (let* ((tax-entity-codes (cdr (assv (if (eqv? tax-entity-type "")
-                                              'F1040
-                                              (string->symbol tax-entity-type))
-                                          categories)))
-             (category (if (assv code tax-entity-codes)
-                           (assv code tax-entity-codes)
-                           #f)))
-            (if category
-                (and category
-                     (vector-ref (cdr category) index))
-                #f))
-      #f))
+  (and-let* ((sym (if (string-null? tax-entity-type)
+                      'F1040
+                      (string->symbol tax-entity-type)))
+             (tax-entity-codes (assv-ref categories sym))
+             (category (assv-ref tax-entity-codes code)))
+    (vector-ref category index)))
 
 (define txf-help-categories
   (list
@@ -147,13 +125,13 @@
     (cons 'N269 #(none "F1040" "Taxable fringe benefits" 1 #f "Taxable fringe" ((2018 "1") (1981 "7") (1980 "8"))))
     (cons 'N487 #(current "F1040" "Dividend, non-taxable" 3 #f "_DivInc TaxFree" ((2018 "2a") (1988 "8b") (1987 "9"))))
     (cons 'N683 #(none "F1040" "Qualified dividend" 3 #f "" ((2018 "3a") (2003 "9b"))))
-    (cons 'N261 #(none "F1040" "Alimony received" 1 #f "Alimony receive" ((2018 "Schedule 1, 11") (1988 "11") (1987 "12") (1986 "11") (1981 "10") (1980 "12"))))
+    (cons 'N261 #(none "F1040" "Alimony received" 1 #f "Alimony receive" ((2019 "Schedule 1, 2a") (2018 "Schedule 1, 11") (1988 "11") (1987 "12") (1986 "11") (1981 "10") (1980 "12"))))
     (cons 'N519 #(none "F1040" "RR retirement income" 1 #f "RR retirement i" ((2018 "5a") (1994 "20a") (1988 "21a") (1987 "20a") (1984 "21a"))))
     (cons 'N520 #(none "F1040" "RR retirement inc, spouse" 1 #f "RR retirement i" ((2018 "5a") (1994 "20a") (1988 "21a") (1987 "20a") (1984 "21a"))))
     (cons 'N266 #(none "F1040" "Soc. Sec. income" 1 #f "Social Security" ((2018 "5a") (1994 "20a") (1988 "21a") (1987 "20a") (1984 "21a"))))
     (cons 'N483 #(none "F1040" "Soc. Sec. income, spouse" 1 #f "Social Security" ((2018 "5a") (1994 "20a") (1988 "21a") (1987 "20a") (1984 "21a"))))
-    (cons 'N257 #(none "F1040" "Other income-misc." 1 #f "Other income, m" ((2018 "Schedule 1, 21") (1994 "21") (1988 "22") (1987 "21") (1984 "22") (1982 "21") (1981 "20") (1980 "21"))))
-    (cons 'N259 #(none "F1040" "Prizes, awards" 1 #f "Prizes, awards" ((2018 "Schedule 1, 21") (1994 "21") (1988 "22") (1987 "21") (1984 "22") (1982 "21") (1981 "20") (1980 "21"))))
+    (cons 'N257 #(none "F1040" "Other income-misc." 1 #f "Other income, m" ((2019 "Schedule 1, 8") (2018 "Schedule 1, 21") (1994 "21") (1988 "22") (1987 "21") (1984 "22") (1982 "21") (1981 "20") (1980 "21"))))
+    (cons 'N259 #(none "F1040" "Prizes, awards" 1 #f "Prizes, awards" ((2019 "Schedule 1, 8") (2018 "Schedule 1, 21") (1994 "21") (1988 "22") (1987 "21") (1984 "22") (1982 "21") (1981 "20") (1980 "21"))))
 
     (cons 'N285 #(not-impl "Sched B" "Schedule B" 1 #f ""))
     (cons 'N287 #(current "Sched B" "Interest income" 3 #f "_IntInc" ((1990 "1") (1982 "2") (1981 "1a") (1980 "1"))))
@@ -175,7 +153,7 @@
     (cons 'N497 #(not-impl "Sched C-EZ" "Schedule C-EZ" 1 #t ""))
     (cons 'N498 #(not-impl "Sched C-EZ" "Spouse" 0 #t "" ((1992 ""))))
     (cons 'N501 #(not-impl "Sched C-EZ" "Principal business/prof" 2 #t "" ((1992 "A"))))
-    (cons 'N499 #(none "Sched C-EZ" "Gross receipts" 1 #t "" ((2012 "1") (2011 "1b") (1992 "1"))))
+    (cons 'N499 #(none "Sched C-EZ" "Gross receipts" 1 #t "" ((2012 "1") (2011 "1b") (1992 "1")) 2018))
 
     (cons 'N320 #(not-impl "Sched D" "Schedule D" 1 #f ""))
     (cons 'N321 #(not-impl "Form 8949 Copy A" "Short Term gain/loss - security" 5 #f "" ((2013 "Part I, 1") (2011 "1") (1993 "Sched D, line 1") (1991 "Sched D, line 1a") (1986 "Sched D, line 2a") (1985 "Sched D, line 1b") (1980 "Sched D, line 1"))))
@@ -276,7 +254,7 @@
     (cons 'N448 #(parent "Sched K-1" "Ordinary income or loss" 1 #t "" ((1990 "1"))))
     (cons 'N449 #(parent "Sched K-1" "Rental RE income or loss" 1 #t "" ((1990 "2"))))
     (cons 'N450 #(parent "Sched K-1" "Other rental income or loss" 1 #t "" ((1990 "3"))))
-    (cons 'N455 #(parent "Sched K-1" "Guaranteed partner payments" 1 #t "" ((2004 "4") (1990 "5"))))
+    (cons 'N455 #(parent "Sched K-1" "Guaranteed partner payments" 1 #t "" ((2019 "4a or 4b") (2004 "4") (1990 "5"))))
     (cons 'N451 #(parent "Sched K-1" "Interest income" 1 #t "" ((2004 "5") (1990 "4a"))))
     (cons 'N452 #(parent "Sched K-1" "Dividends" 1 #t "" ((2004 "6a") (2003 "4b(2)") (1990 "4b"))))
     (cons 'N527 #(parent "Sched K-1" "Royalties" 1 #t "" ((2004 "7") (1990 "4c"))))
@@ -421,7 +399,7 @@
     (cons 'N448 #(parent "Sched K-1" "Ordinary income or loss" 1 #t "" ((1990 "1"))))
     (cons 'N449 #(parent "Sched K-1" "Rental RE income or loss" 1 #t "" ((1990 "2"))))
     (cons 'N450 #(parent "Sched K-1" "Other rental income or loss" 1 #t "" ((1990 "3"))))
-    (cons 'N455 #(parent "Sched K-1" "Guaranteed partner payments" 1 #t "" ((2004 "4") (1990 "5"))))
+    (cons 'N455 #(parent "Sched K-1" "Guaranteed partner payments" 1 #t "" ((2019 "4a or 4b") (2004 "4") (1990 "5"))))
     (cons 'N451 #(parent "Sched K-1" "Interest income" 1 #t "" ((2004 "5") (1990 "4a"))))
     (cons 'N452 #(parent "Sched K-1" "Dividends" 1 #t "" ((2004 "6a") (2003 "4b(2)") (1990 "4b"))))
     (cons 'N527 #(parent "Sched K-1" "Royalties" 1 #t "" ((2004 "7") (1990 "4c"))))
@@ -539,30 +517,30 @@
     (cons 'N000 #(none "" "Tax Report Only - No TXF Export" 0 #f ""))
 
     (cons 'N256 #(not-impl "F1040" "Form 1040" 1 #f ""))
-    (cons 'N680 #(none "F1040" "Educator expenses,self" 1 #f "" ((2018 "Schedule 1, 23") (2007 "23") (2006 "NA - Expired") (2002 "23"))))
-    (cons 'N681 #(none "F1040" "Educator expenses,spouse" 1 #f "" ((2018 "Schedule 1, 23") (2007 "23") (2006 "NA - Expired") (2002 "23"))))
+    (cons 'N680 #(none "F1040" "Educator expenses,self" 1 #f "" ((2019 "Schedule 1, 10") (2018 "Schedule 1, 23") (2007 "23") (2006 "NA - Expired") (2002 "23"))))
+    (cons 'N681 #(none "F1040" "Educator expenses,spouse" 1 #f "" ((2019 "Schedule 1, 10") (2018 "Schedule 1, 23") (2007 "23") (2006 "NA - Expired") (2002 "23"))))
     (cons 'N482 #(none "F1040" "IRA contribution, non-work spouse" 1 #f "" ((1997 "23") (1994 "23b") (1990 "24b") (1989 "25") (1987 "25b") (1985 "26") (1983 "26a") (1982 "25") (1981 "24") (1980 "25")) 2000))
-    (cons 'N607 #(none "F1040" "Med savings contribution, self" 1 #f "Med savings con" ((2018 "Schedule 1, 25") (2005 "25") (2004 "35") (2003 "33") (2002 "27") (1998 "25") (1997 "24"))))
-    (cons 'N608 #(none "F1040" "Med savings contribution, spouse" 1 #f "Med savings con" ((2018 "Schedule 1, 25") (2005 "25") (2004 "35") (2003 "33") (2002 "27") (1998 "25") (1997 "24"))))
-    (cons 'N263 #(none "F1040" "Keogh deduction, self" 1 #f "Keogh deduction" ((2018 "Schedule 1, 28") (2005 "28") (2004 "32") (2003 "30") (2002 "31") (1998 "29") (1997 "28") (1988 "27") (1987 "26") (1984 "27") (1982 "26") (1981 "25") (1980 "26"))))
-    (cons 'N516 #(none "F1040" "Keogh deduction, spouse" 1 #f "Keogh deduction" ((2018 "Schedule 1, 28") (2005 "28") (2004 "32") (2003 "30") (2002 "31") (1998 "29") (1997 "28") (1988 "27") (1987 "26") (1984 "27") (1982 "26") (1981 "25") (1980 "26"))))
-    (cons 'N517 #(none "F1040" "SEP deduction, self" 1 #f "SEP deduction," ((2018 "Schedule 1, 28") (2005 "28") (2004 "32") (2003 "30") (2002 "31") (1998 "29") (1997 "28") (1988 "27") (1987 "26") (1984 "27") (1982 "26") (1981 "25") (1980 "26"))))
-    (cons 'N518 #(none "F1040" "SEP deduction, spouse" 1 #f "SEP deduction," ((2018 "Schedule 1, 28") (2005 "28") (2004 "32") (2003 "30") (2002 "31") (1998 "29") (1997 "28") (1988 "27") (1987 "26") (1984 "27") (1982 "26") (1981 "25") (1980 "26"))))
-    (cons 'N609 #(none "F1040" "SIMPLE contribution, self" 1 #f "SIMPLE contribu" ((2018 "Schedule 1, 28") (2005 "28") (2004 "32") (2003 "30") (2002 "31") (1998 "29") (1997 "28") (1988 "27") (1987 "26") (1984 "27") (1982 "26") (1981 "25") (1980 "26"))))
-    (cons 'N610 #(none "F1040" "SIMPLE contribution, spouse" 1 #f "SIMPLE contribu" ((2018 "Schedule 1, 28") (2005 "28") (2004 "32") (2003 "30") (2002 "31") (1998 "29") (1997 "28") (1988 "27") (1987 "26") (1984 "27") (1982 "26") (1981 "25") (1980 "26"))))
-    (cons 'N265 #(current "F1040" "Early withdrawal penalty" 1 #f "Early withdrawa" ((2018 "Schedule 1, 30") (2005 "30") (2004 "33") (2003 "31") (2002 "32") (1998 "30") (1997 "29") (1988 "28") (1987 "27") (1984 "28") (1982 "27") (1981 "26")(1980 "27"))))
-    (cons 'N264 #(none "F1040" "Alimony paid" 1 #f "Alimony paid" ((2018 "Schedule 1, 31a") (2005 "31a") (2004 "34a") (2003 "32a") (2002 "33a") (1998 "31a") (1997 "30a") (1988 "29") (1987 "28") (1984 "29") (1982 "28") (1981 "27") (1980 "28"))))
-    (cons 'N262 #(none "F1040" "IRA contribution, self" 1 #f "IRA Contrib" ((2018 "Schedule 1, 32") (2005 "32") (2004 "25") (2002 "24") (1997 "23") (1994 "23a") (1990 "24a") (1989 "24") (1987 "25a") (1985 "26") (1983 "26a") (1982 "25") (1981 "24") (1980 "25"))))
-    (cons 'N481 #(none "F1040" "IRA contribution, spouse" 1 #f "" ((2018 "Schedule 1, 32") (2005 "32") (2004 "25") (2002 "24") (1997 "23") (1994 "23b") (1990 "24b") (1989 "25") (1987 "25b") (1983 "26a") (1982 "25") (1981 "24") (1980 "25"))))
-    (cons 'N636 #(none "F1040" "Student loan interest" 1 #f "Student loan in" ((2018 "Schedule 1, 33") (2005 "33") (2004 "26") (2002 "25") (1998 "24"))))
-    (cons 'N613 #(none "F1040" "Fed tax withheld, RR retire, self" 1 #f "Tax:Fed wh, RR" ((2018 "16") (2014 "64") (2011 "62") (2009 "61") (2008 "62") (2005 "64") (2004 "63") (2003 "61") (2002 "62") (2001 "59") (2000 "58") (1998 "57") (1997 "54") (1996 "52") (1995 "55") (1991 "54") (1990 "55") (1989 "56") (1987 "54") (1986 "56") (1983 "57") (1982 "60") (1980 "55"))))
-    (cons 'N614 #(none "F1040" "Fed tax withheld, RR retire, spouse" 1 #f "Tax Spouse:Fed" ((2018 "16") (2014 "64") (2011 "62") (2009 "61") (2008 "62") (2005 "64") (2004 "63") (2003 "61") (2002 "62") (2001 "59") (2000 "58") (1998 "57") (1997 "54") (1996 "52") (1995 "55") (1991 "54") (1990 "55") (1989 "56") (1987 "54") (1986 "56") (1983 "57") (1982 "60") (1980 "55"))))
-    (cons 'N611 #(none "F1040" "Fed tax withheld, Soc. Sec., self" 1 #f "Tax:Fed wh, Soc" ((2018 "16") (2014 "64") (2011 "62") (2009 "61") (2008 "62") (2005 "64") (2004 "63") (2003 "61") (2002 "62") (2001 "59") (2000 "58") (1998 "57") (1997 "54") (1996 "52") (1995 "55") (1991 "54") (1990 "55") (1989 "56") (1987 "54") (1986 "56") (1983 "57") (1982 "60") (1980 "55"))))
-    (cons 'N612 #(none "F1040" "Fed tax withheld, Soc. Sec., spouse" 1 #f "Tax Spouse:Fed" ((2018 "16") (2014 "64") (2011 "62") (2009 "61") (2008 "62") (2005 "64") (2004 "63") (2003 "61") (2002 "62") (2001 "59") (2000 "58") (1998 "57") (1997 "54") (1996 "52") (1995 "55") (1991 "54") (1990 "55") (1989 "56") (1987 "54") (1986 "56") (1983 "57") (1982 "60") (1980 "55"))))
-    (cons 'N615 #(current "F1040" "Fed tax withheld, dividend income" 3 #f "" ((2018 "16") (2014 "64") (2011 "62") (2009 "61") (2008 "62") (2005 "64") (2004 "63") (2003 "61") (2002 "62") (2001 "59") (2000 "58") (1998 "57") (1997 "54") (1996 "52") (1995 "55") (1991 "54") (1990 "55") (1989 "56") (1987 "54") (1986 "56") (1983 "57") (1982 "60") (1980 "55"))))
-    (cons 'N616 #(current "F1040" "Fed tax withheld, interest income" 3 #f "" ((2018 "16") (2014 "64") (2011 "62") (2009 "61") (2008 "62") (2005 "64") (2004 "63") (2003 "61") (2002 "62") (2001 "59") (2000 "58") (1998 "57") (1997 "54") (1996 "52") (1995 "55") (1991 "54") (1990 "55") (1989 "56") (1987 "54") (1986 "56") (1983 "57") (1982 "60") (1980 "55"))))
-    (cons 'N521 #(none "F1040" "Federal estimated tax, qrtrly" 6 #f "Tax:Fed Estimat" ((2018 "Schedule 5, 66") (2014 "65") (2011 "63") (2009 "62") (2008 "63") (2005 "65") (2004 "64") (2003 "62") (2002 "63") (2001 "60") (2000 "59") (1998 "58") (1997 "55") (1996 "53") (1995 "56") (1991 "55") (1990 "56") (1989 "57") (1987 "55") (1986 "57") (1983 "58") (1982 "61") (1980 "56"))))
-    (cons 'N268 #(none "F1040" "Fed. estimated tax" 1 #f "" ((2018 "Schedule 5, 66") (2014 "65") (2011 "63") (2009 "62") (2008 "63") (2005 "65") (2004 "64") (2003 "62") (2002 "63") (2001 "60") (2000 "59") (1998 "58") (1997 "55") (1996 "53") (1995 "56") (1991 "55") (1990 "56") (1989 "57") (1987 "55") (1986 "57") (1983 "58") (1982 "61") (1980 "56"))))
+    (cons 'N607 #(none "F1040" "Med savings contribution, self" 1 #f "Med savings con" ((2019 "Schedule 1, 12") (2018 "Schedule 1, 25") (2005 "25") (2004 "35") (2003 "33") (2002 "27") (1998 "25") (1997 "24"))))
+    (cons 'N608 #(none "F1040" "Med savings contribution, spouse" 1 #f "Med savings con" ((2019 "Schedule 1, 12") (2018 "Schedule 1, 25") (2005 "25") (2004 "35") (2003 "33") (2002 "27") (1998 "25") (1997 "24"))))
+    (cons 'N263 #(none "F1040" "Keogh deduction, self" 1 #f "Keogh deduction" ((2019 "Schedule 1, 15") (2018 "Schedule 1, 28") (2005 "28") (2004 "32") (2003 "30") (2002 "31") (1998 "29") (1997 "28") (1988 "27") (1987 "26") (1984 "27") (1982 "26") (1981 "25") (1980 "26"))))
+    (cons 'N516 #(none "F1040" "Keogh deduction, spouse" 1 #f "Keogh deduction" ((2019 "Schedule 1, 15") (2018 "Schedule 1, 28") (2005 "28") (2004 "32") (2003 "30") (2002 "31") (1998 "29") (1997 "28") (1988 "27") (1987 "26") (1984 "27") (1982 "26") (1981 "25") (1980 "26"))))
+    (cons 'N517 #(none "F1040" "SEP deduction, self" 1 #f "SEP deduction," ((2019 "Schedule 1, 15") (2018 "Schedule 1, 28") (2005 "28") (2004 "32") (2003 "30") (2002 "31") (1998 "29") (1997 "28") (1988 "27") (1987 "26") (1984 "27") (1982 "26") (1981 "25") (1980 "26"))))
+    (cons 'N518 #(none "F1040" "SEP deduction, spouse" 1 #f "SEP deduction," ((2019 "Schedule 1, 15") (2018 "Schedule 1, 28") (2005 "28") (2004 "32") (2003 "30") (2002 "31") (1998 "29") (1997 "28") (1988 "27") (1987 "26") (1984 "27") (1982 "26") (1981 "25") (1980 "26"))))
+    (cons 'N609 #(none "F1040" "SIMPLE contribution, self" 1 #f "SIMPLE contribu" ((2019 "Schedule 1, 15") (2018 "Schedule 1, 28") (2005 "28") (2004 "32") (2003 "30") (2002 "31") (1998 "29") (1997 "28") (1988 "27") (1987 "26") (1984 "27") (1982 "26") (1981 "25") (1980 "26"))))
+    (cons 'N610 #(none "F1040" "SIMPLE contribution, spouse" 1 #f "SIMPLE contribu" ((2019 "Schedule 1, 15") (2018 "Schedule 1, 28") (2005 "28") (2004 "32") (2003 "30") (2002 "31") (1998 "29") (1997 "28") (1988 "27") (1987 "26") (1984 "27") (1982 "26") (1981 "25") (1980 "26"))))
+    (cons 'N265 #(current "F1040" "Early withdrawal penalty" 1 #f "Early withdrawa" ((2019 "Schedule 1, 13") (2018 "Schedule 1, 30") (2005 "30") (2004 "33") (2003 "31") (2002 "32") (1998 "30") (1997 "29") (1988 "28") (1987 "27") (1984 "28") (1982 "27") (1981 "26")(1980 "27"))))
+    (cons 'N264 #(none "F1040" "Alimony paid" 1 #f "Alimony paid" ((2019 "Schedule 1, 18a") (2018 "Schedule 1, 31a") (2005 "31a") (2004 "34a") (2003 "32a") (2002 "33a") (1998 "31a") (1997 "30a") (1988 "29") (1987 "28") (1984 "29") (1982 "28") (1981 "27") (1980 "28"))))
+    (cons 'N262 #(none "F1040" "IRA contribution, self" 1 #f "IRA Contrib" ((2019 "Schedule 1, 19") (2018 "Schedule 1, 32") (2005 "32") (2004 "25") (2002 "24") (1997 "23") (1994 "23a") (1990 "24a") (1989 "24") (1987 "25a") (1985 "26") (1983 "26a") (1982 "25") (1981 "24") (1980 "25"))))
+    (cons 'N481 #(none "F1040" "IRA contribution, spouse" 1 #f "" ((2019 "Schedule 1, 19") (2018 "Schedule 1, 32") (2005 "32") (2004 "25") (2002 "24") (1997 "23") (1994 "23b") (1990 "24b") (1989 "25") (1987 "25b") (1983 "26a") (1982 "25") (1981 "24") (1980 "25"))))
+    (cons 'N636 #(none "F1040" "Student loan interest" 1 #f "Student loan in" ((2019 "Schedule 1, 20") (2018 "Schedule 1, 33") (2005 "33") (2004 "26") (2002 "25") (1998 "24"))))
+    (cons 'N613 #(none "F1040" "Fed tax withheld, RR retire, self" 1 #f "Tax:Fed wh, RR" ((2019 "17") (2018 "16") (2014 "64") (2011 "62") (2009 "61") (2008 "62") (2005 "64") (2004 "63") (2003 "61") (2002 "62") (2001 "59") (2000 "58") (1998 "57") (1997 "54") (1996 "52") (1995 "55") (1991 "54") (1990 "55") (1989 "56") (1987 "54") (1986 "56") (1983 "57") (1982 "60") (1980 "55"))))
+    (cons 'N614 #(none "F1040" "Fed tax withheld, RR retire, spouse" 1 #f "Tax Spouse:Fed" ((2019 "17") (2018 "16") (2014 "64") (2011 "62") (2009 "61") (2008 "62") (2005 "64") (2004 "63") (2003 "61") (2002 "62") (2001 "59") (2000 "58") (1998 "57") (1997 "54") (1996 "52") (1995 "55") (1991 "54") (1990 "55") (1989 "56") (1987 "54") (1986 "56") (1983 "57") (1982 "60") (1980 "55"))))
+    (cons 'N611 #(none "F1040" "Fed tax withheld, Soc. Sec., self" 1 #f "Tax:Fed wh, Soc" ((2019 "17") (2018 "16") (2014 "64") (2011 "62") (2009 "61") (2008 "62") (2005 "64") (2004 "63") (2003 "61") (2002 "62") (2001 "59") (2000 "58") (1998 "57") (1997 "54") (1996 "52") (1995 "55") (1991 "54") (1990 "55") (1989 "56") (1987 "54") (1986 "56") (1983 "57") (1982 "60") (1980 "55"))))
+    (cons 'N612 #(none "F1040" "Fed tax withheld, Soc. Sec., spouse" 1 #f "Tax Spouse:Fed" ((2019 "17") (2018 "16") (2014 "64") (2011 "62") (2009 "61") (2008 "62") (2005 "64") (2004 "63") (2003 "61") (2002 "62") (2001 "59") (2000 "58") (1998 "57") (1997 "54") (1996 "52") (1995 "55") (1991 "54") (1990 "55") (1989 "56") (1987 "54") (1986 "56") (1983 "57") (1982 "60") (1980 "55"))))
+    (cons 'N615 #(current "F1040" "Fed tax withheld, dividend income" 3 #f "" ((2019 "17") (2018 "16") (2014 "64") (2011 "62") (2009 "61") (2008 "62") (2005 "64") (2004 "63") (2003 "61") (2002 "62") (2001 "59") (2000 "58") (1998 "57") (1997 "54") (1996 "52") (1995 "55") (1991 "54") (1990 "55") (1989 "56") (1987 "54") (1986 "56") (1983 "57") (1982 "60") (1980 "55"))))
+    (cons 'N616 #(current "F1040" "Fed tax withheld, interest income" 3 #f "" ((2019 "17") (2018 "16") (2014 "64") (2011 "62") (2009 "61") (2008 "62") (2005 "64") (2004 "63") (2003 "61") (2002 "62") (2001 "59") (2000 "58") (1998 "57") (1997 "54") (1996 "52") (1995 "55") (1991 "54") (1990 "55") (1989 "56") (1987 "54") (1986 "56") (1983 "57") (1982 "60") (1980 "55"))))
+    (cons 'N521 #(none "F1040" "Federal estimated tax, qrtrly" 6 #f "Tax:Fed Estimat" ((2019 "Schedule 3, 8") (2018 "Schedule 5, 66") (2014 "65") (2011 "63") (2009 "62") (2008 "63") (2005 "65") (2004 "64") (2003 "62") (2002 "63") (2001 "60") (2000 "59") (1998 "58") (1997 "55") (1996 "53") (1995 "56") (1991 "55") (1990 "56") (1989 "57") (1987 "55") (1986 "57") (1983 "58") (1982 "61") (1980 "56"))))
+    (cons 'N268 #(none "F1040" "Fed. estimated tax" 1 #f "" ((2019 "Schedule 3, 8") (2018 "Schedule 5, 66") (2014 "65") (2011 "63") (2009 "62") (2008 "63") (2005 "65") (2004 "64") (2003 "62") (2002 "63") (2001 "60") (2000 "59") (1998 "58") (1997 "55") (1996 "53") (1995 "56") (1991 "55") (1990 "56") (1989 "57") (1987 "55") (1986 "57") (1983 "58") (1982 "61") (1980 "56"))))
 
     (cons 'N270 #(not-impl "Sched A" "Schedule A" 1 #f ""))
     (cons 'N273 #(none "Sched A" "Medicine and drugs" 1 #f "Medical:Medicin" ((1990 "1") (1987 "1a") (1982 "1") (1980 "2"))))

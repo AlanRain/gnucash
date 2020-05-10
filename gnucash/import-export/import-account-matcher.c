@@ -40,12 +40,33 @@
 
 #include "gnc-commodity.h"
 #include "gnc-engine.h"
+#include "gnc-prefs.h"
 #include "gnc-tree-view-account.h"
 #include "gnc-ui.h"
 
 static QofLogModule log_module = GNC_MOD_IMPORT;
 
 #define STATE_SECTION "dialogs/import/generic_matcher/account_matcher"
+
+#define GNC_PREFS_GROUP "dialogs.import.generic.account-picker"
+
+typedef struct
+{
+    Account* partial_match;
+    int count;
+    const char* online_id;
+} AccountOnlineMatch;
+
+static Account*
+partial_match_if_valid (AccountOnlineMatch *match)
+{
+    if (match->partial_match && match->count == 1)
+        return match->partial_match;
+    else
+        PERR("Online ID %s partially matches %d accounts and fully matches none",
+             match->online_id, match->count);
+    return NULL;
+}
 
 /*-******************************************************************\
  * Functions needed by gnc_import_select_account
@@ -58,7 +79,6 @@ static AccountPickerDialog* gnc_import_new_account_picker(void)
 {
     AccountPickerDialog* picker = g_new(AccountPickerDialog, 1);
     picker->dialog = NULL;
-    picker->assistant = NULL;
     picker->account_tree = NULL;
     picker->account_tree_sw = NULL;
     picker->auto_create = TRUE;
@@ -78,26 +98,73 @@ static AccountPickerDialog* gnc_import_new_account_picker(void)
  *
  * test for match of account online_ids.
  **************************************************/
-static gpointer test_acct_online_id_match(Account *acct, gpointer param_online_id)
+static gpointer test_acct_online_id_match(Account *acct, gpointer data)
 {
-    const gchar * current_online_id = gnc_import_get_acc_online_id(acct);
-    if ( (current_online_id != NULL
-            && param_online_id != NULL )
-            && strcmp( current_online_id, param_online_id ) == 0 )
-    {
-        return (gpointer *) acct;
-    }
-    else
-    {
+    AccountOnlineMatch *match = (AccountOnlineMatch*)data;
+    const char *acct_online_id = gnc_import_get_acc_online_id(acct);
+    int acct_len, match_len;
+
+    if (acct_online_id == NULL || match->online_id == NULL)
         return NULL;
+
+    acct_len = strlen(acct_online_id);
+    match_len = strlen(match->online_id);
+
+    if (acct_online_id[acct_len - 1] == ' ')
+        --acct_len;
+    if (match->online_id[match_len - 1] == ' ')
+        --match_len;
+
+    if (strncmp (acct_online_id, match->online_id, acct_len) == 0)
+    {
+        if (strncmp(acct_online_id, match->online_id, match_len) == 0)
+            return (gpointer *) acct;
+        if (match->partial_match == NULL)
+        {
+            match->partial_match = acct;
+            ++match->count;
+        }
+        else
+        {
+            const char *partial_online_id =
+                gnc_import_get_acc_online_id(match->partial_match);
+            int partial_len = strlen(partial_online_id);
+            if (partial_online_id[partial_len - 1] == ' ')
+                --partial_len;
+            /* Both partial_online_id and acct_online_id are substrings of
+             * match->online_id, but whichever is longer is the better match.
+             * Reset match->count to 1 just in case there was ambiguity on the
+             * shorter partial match.
+             */
+            if (partial_len < acct_len)
+            {
+                match->partial_match = acct;
+                match->count = 1;
+            }
+            /* If they're the same size then there are two accounts with the
+             * same online id and we don't know which one to select. Increment
+             * match->count to dissuade gnc_import_find_account from using
+             * match->online_id and log an error.
+             */
+            else if (partial_len == acct_len)
+            {
+                ++match->count;
+                PERR("Accounts %s and %s have the same online-id %s",
+                     gnc_account_get_full_name(match->partial_match),
+                     gnc_account_get_full_name(acct),
+                     partial_online_id);
+            }
+        }
     }
+
+    return NULL;
 }
 
 
 /***********************************************************
  * build_acct_tree
  *
- * build the account tree with the custome column, online_id
+ * build the account tree with the custom column, online_id
  ************************************************************/
 static void
 build_acct_tree(AccountPickerDialog *picker)
@@ -147,8 +214,6 @@ gnc_import_add_account(GtkWidget *button, AccountPickerDialog *picker)
 
     if (picker->dialog != NULL)
         parent = GTK_WINDOW (picker->dialog);
-    else
-        parent = GTK_WINDOW (picker->assistant);
 
     /*DEBUG("Begin");  */
     if (picker->new_account_default_type != ACCT_TYPE_NONE)
@@ -167,6 +232,101 @@ gnc_import_add_account(GtkWidget *button, AccountPickerDialog *picker)
 }
 
 
+/***********************************************************
+ * show_placeholder_warning
+ *
+ * show the warning when account is a place holder and disable
+ * OK button
+ ************************************************************/
+static void
+show_placeholder_warning (AccountPickerDialog *picker, const gchar *name)
+{
+    gchar *text = g_strdup_printf (_("The account %s is a placeholder account and does not allow "
+                                     "transactions. Please choose a different account."), name);
+
+    gtk_label_set_text (GTK_LABEL(picker->pwarning), text);
+    gnc_label_set_alignment (picker->pwarning, 0.0, 0.5);
+    gtk_widget_show_all (GTK_WIDGET(picker->pwhbox));
+    g_free (text);
+
+    gtk_widget_set_sensitive (picker->ok_button, FALSE); // disable OK button
+}
+
+
+/*******************************************************
+ * account_tree_row_changed_cb
+ *
+ * Callback for when user selects a different row
+ *******************************************************/
+static void
+account_tree_row_changed_cb (GtkTreeSelection *selection,
+                             AccountPickerDialog *picker)
+{
+
+    Account *sel_account = gnc_tree_view_account_get_selected_account (picker->account_tree);
+
+    gtk_widget_set_sensitive (picker->ok_button, TRUE); // enable OK button
+
+    /* See if the selected account is a placeholder. */
+    if (sel_account && xaccAccountGetPlaceholder (sel_account))
+    {
+        const gchar *retval_name = xaccAccountGetName (sel_account);
+
+        show_placeholder_warning (picker, retval_name);
+    }
+    else
+        gtk_widget_hide (GTK_WIDGET(picker->pwhbox)); // hide the placeholder warning
+}
+
+static gboolean
+account_tree_key_press_cb(GtkWidget *widget, GdkEventKey *event, gpointer user_data)
+{
+    // Expand the tree when the user starts typing, this will allow sub-accounts to be found.
+    if (event->length == 0)
+        return FALSE;
+    
+    switch (event->keyval)
+    {
+        case GDK_KEY_plus:
+        case GDK_KEY_minus:
+        case GDK_KEY_asterisk:
+        case GDK_KEY_slash:
+        case GDK_KEY_KP_Add:
+        case GDK_KEY_KP_Subtract:
+        case GDK_KEY_KP_Multiply:
+        case GDK_KEY_KP_Divide:
+        case GDK_KEY_Up:
+        case GDK_KEY_KP_Up:
+        case GDK_KEY_Down:
+        case GDK_KEY_KP_Down:
+        case GDK_KEY_Home:
+        case GDK_KEY_KP_Home:
+        case GDK_KEY_End:
+        case GDK_KEY_KP_End:
+        case GDK_KEY_Page_Up:
+        case GDK_KEY_KP_Page_Up:
+        case GDK_KEY_Page_Down:
+        case GDK_KEY_KP_Page_Down:
+        case GDK_KEY_Right:
+        case GDK_KEY_Left:
+        case GDK_KEY_KP_Right:
+        case GDK_KEY_KP_Left:
+        case GDK_KEY_space:
+        case GDK_KEY_KP_Space:
+        case GDK_KEY_backslash:
+        case GDK_KEY_Return:
+        case GDK_KEY_ISO_Enter:
+        case GDK_KEY_KP_Enter:
+            return FALSE;
+            break;
+        default:
+            gtk_tree_view_expand_all (GTK_TREE_VIEW(user_data));
+            return FALSE;
+    }
+    return FALSE;
+}
+
+
 /*******************************************************
  * account_tree_row_activated_cb
  *
@@ -177,53 +337,7 @@ account_tree_row_activated_cb(GtkTreeView *view, GtkTreePath *path,
                               GtkTreeViewColumn *column,
                               AccountPickerDialog *picker)
 {
-    const gchar *retval_name = NULL;
-    Account *old_id_acc;
-
-    /* See if we have a dialog, if not we are an assistant */
-    if (picker->dialog == NULL)
-    {
-        GtkAssistant *assistant = GTK_ASSISTANT(picker->assistant);
-        gint num = gtk_assistant_get_current_page (assistant);
-        GtkWidget *page = gtk_assistant_get_nth_page (assistant, num);
-
-        picker->retAccount = gnc_tree_view_account_get_selected_account(picker->account_tree);
-        if (picker->retAccount)
-            retval_name = xaccAccountGetName(picker->retAccount);
-        if (!retval_name)
-            retval_name = "(null)";
-        DEBUG("Selected account %p, %s", picker->retAccount, retval_name);
-
-        /* See if the selected account is a placeholder. */
-        if (picker->retAccount && xaccAccountGetPlaceholder (picker->retAccount))
-        {
-            gnc_error_dialog (GTK_WINDOW (picker->dialog),
-                              _("The account %s is a placeholder account and does not allow "
-                                "transactions. Please choose a different account."),
-                              retval_name);
-        }
-        else if ( picker->account_online_id_value != NULL)
-        {
-            /* find the old account for this on line id value and reset it */
-            old_id_acc =
-                gnc_account_foreach_descendant_until(gnc_get_current_root_account (),
-                        test_acct_online_id_match,
-                        /* This argument will only be used as a "const char*" */
-                        (void*)picker->account_online_id_value);
-
-            if (old_id_acc != NULL)
-                gnc_import_set_acc_online_id(old_id_acc, "");
-
-            gnc_import_set_acc_online_id(picker->retAccount, picker->account_online_id_value);
-            gtk_assistant_set_page_complete (assistant, page, TRUE);
-        }
-        else
-            gtk_assistant_set_page_complete (assistant, page, TRUE);
-    }
-    else
-    {
-        gtk_dialog_response(GTK_DIALOG(picker->dialog), GTK_RESPONSE_OK);
-    }
+    gtk_dialog_response(GTK_DIALOG(picker->dialog), GTK_RESPONSE_OK);
 }
 
 
@@ -247,7 +361,8 @@ Account * gnc_import_select_account(GtkWidget *parent,
     Account * retval = NULL;
     const gchar *retval_name = NULL;
     GtkBuilder *builder;
-    GtkWidget * online_id_label, *box, *pbox;
+    GtkTreeSelection *selection;
+    GtkWidget * online_id_label;
     gchar account_description_text[ACCOUNT_DESCRIPTION_MAX_SIZE + 1] = "";
     gboolean ok_pressed_retval = FALSE;
 
@@ -263,39 +378,14 @@ Account * gnc_import_select_account(GtkWidget *parent,
     /*DEBUG("Looking for account with online_id: \"%s\"", account_online_id_value);*/
     if (account_online_id_value != NULL)
     {
+        AccountOnlineMatch match = {NULL, 0, account_online_id_value};
         retval =
             gnc_account_foreach_descendant_until(gnc_get_current_root_account (),
-                    test_acct_online_id_match,
-                    /* This argument will only be used as a "const char*" */
-                    (void*)account_online_id_value);
-
-        /* BEGIN: try again without extra space at the end */
-        /*
-         * libofx, used for file import, generates online_id as
-         * ACCTID + space + ACCTKEY which differs from the online_id
-         * generated by aqbanking for online ofx transfer as ACCTID.
-         *
-         * If a gnucash account has been associated with an online_id
-         * via aqbanking data, it is not possible to construct an OFX
-         * file for gnucash import that matches the same online_id
-         * because even with no ACCTKEY in the file, there will be a
-         * trailing space.
-         *
-         * This is a hack to overcome that problem.
-         */
-        if ((retval == NULL) && g_str_has_suffix(account_online_id_value, " "))
-        {
-            gchar *trimmed = g_strndup(account_online_id_value, strlen(account_online_id_value) - 1);
-            if (trimmed)
-            {
-                retval = gnc_account_foreach_descendant_until(
-                             gnc_get_current_root_account (),
-                             test_acct_online_id_match,
-                             (void *)trimmed);
-            }
-            g_free(trimmed);
-        }
-        /* END: try again without extra space at the end */
+                                                 test_acct_online_id_match,
+                                                 (void*)&match);
+        if (!retval && match.count == 1 &&
+            new_account_default_type == ACCT_TYPE_NONE)
+            retval = match.partial_match;
     }
     if (retval == NULL && auto_create != 0)
     {
@@ -303,21 +393,22 @@ Account * gnc_import_select_account(GtkWidget *parent,
         builder = gtk_builder_new();
         gnc_builder_add_from_file (builder, "dialog-import.glade", "account_new_icon");
         gnc_builder_add_from_file (builder, "dialog-import.glade", "account_picker_dialog");
-        gnc_builder_add_from_file (builder, "dialog-import.glade", "account_picker_content");
         /* connect the signals in the interface */
         if (builder == NULL)
         {
             PERR("Error opening the glade builder interface");
         }
         picker->dialog = GTK_WIDGET(gtk_builder_get_object (builder, "account_picker_dialog"));
+        picker->pwhbox = GTK_WIDGET(gtk_builder_get_object (builder, "placeholder_warning_hbox"));
+        picker->pwarning = GTK_WIDGET(gtk_builder_get_object (builder, "placeholder_warning_label"));
+        picker->ok_button = GTK_WIDGET(gtk_builder_get_object (builder, "okbutton"));
+
         if (parent)
             gtk_window_set_transient_for (GTK_WINDOW (picker->dialog),
                                           GTK_WINDOW (parent));
 
-        /* Pack the content into the dialog vbox */
-        pbox = GTK_WIDGET(gtk_builder_get_object (builder, "account_picker_vbox"));
-        box = GTK_WIDGET(gtk_builder_get_object (builder, "account_picker_content"));
-        gtk_box_pack_start( GTK_BOX(pbox), box, TRUE, TRUE, 0);
+        gnc_restore_window_size (GNC_PREFS_GROUP,
+                                 GTK_WINDOW(picker->dialog), GTK_WINDOW (parent));
 
         picker->account_tree_sw = GTK_WIDGET(gtk_builder_get_object (builder, "account_tree_sw"));
         online_id_label = GTK_WIDGET(gtk_builder_get_object (builder, "online_id_label"));
@@ -342,11 +433,20 @@ Account * gnc_import_select_account(GtkWidget *parent,
         }
         gtk_label_set_text((GtkLabel*)online_id_label, account_description_text);
         build_acct_tree(picker);
-        gnc_tree_view_account_set_selected_account(picker->account_tree, default_selection);
-
         gtk_window_set_modal(GTK_WINDOW(picker->dialog), TRUE);
         g_signal_connect(picker->account_tree, "row-activated",
                          G_CALLBACK(account_tree_row_activated_cb), picker);
+        
+        /* Connect key press event so we can expand the tree when the user starts typing, allowing
+        * any subaccount to match */
+        g_signal_connect (picker->account_tree, "key-press-event", G_CALLBACK (account_tree_key_press_cb), picker->account_tree);
+
+        selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(picker->account_tree));
+        g_signal_connect(selection, "changed",
+                         G_CALLBACK(account_tree_row_changed_cb), picker);
+
+        gnc_tree_view_account_set_selected_account(picker->account_tree, default_selection);
+
         do
         {
             response = gtk_dialog_run(GTK_DIALOG(picker->dialog));
@@ -373,11 +473,7 @@ Account * gnc_import_select_account(GtkWidget *parent,
                 /* See if the selected account is a placeholder. */
                 if (retval && xaccAccountGetPlaceholder (retval))
                 {
-                    gnc_error_dialog
-                    (GTK_WINDOW (picker->dialog),
-                     _("The account %s is a placeholder account and does not allow "
-                       "transactions. Please choose a different account."),
-                     retval_name);
+                    show_placeholder_warning (picker, retval_name);
                     response = GNC_RESPONSE_NEW;
                     break;
                 }
@@ -397,6 +493,7 @@ Account * gnc_import_select_account(GtkWidget *parent,
         while (response == GNC_RESPONSE_NEW);
 
         g_object_unref(G_OBJECT(builder));
+        gnc_save_window_size (GNC_PREFS_GROUP, GTK_WINDOW(picker->dialog));
         gtk_widget_destroy(picker->dialog);
     }
     else
@@ -413,133 +510,6 @@ Account * gnc_import_select_account(GtkWidget *parent,
     }
     LEAVE("Selected account %p, %s", retval, retval_name ? retval_name : "(null)");
     return retval;
-}
-
-
-/**********************************************************************
- * These are the routines for use with an Assistant page
- **********************************************************************/
-
-/*******************************************************
- * gnc_import_account_assist_setup
- *
- * Main call for page setup in an assistant
- *******************************************************/
-AccountPickerDialog* gnc_import_account_assist_setup(GtkWidget *parent)
-{
-    AccountPickerDialog * picker;
-    GtkBuilder *builder;
-    GtkWidget  *box, *h_box;
-
-    /* Init the account picker structure */
-    picker = gnc_import_new_account_picker();
-
-    /* load the interface */
-    builder = gtk_builder_new();
-    gnc_builder_add_from_file (builder, "dialog-import.glade", "account_picker_content");
-    /* connect the signals in the interface */
-    if (builder == NULL)
-    {
-        PERR("Error opening the glade builder interface");
-    }
-
-    picker->assistant = gtk_widget_get_parent(parent);
-    /* Pack content into Assistant page widget */
-    box = GTK_WIDGET(gtk_builder_get_object (builder, "account_picker_content"));
-    gtk_box_pack_start( GTK_BOX(parent), box, TRUE, TRUE, 6);
-
-    picker->account_tree_sw = GTK_WIDGET(gtk_builder_get_object (builder, "account_tree_sw"));
-    picker->account_online_id_label = GTK_WIDGET(gtk_builder_get_object (builder, "online_id_label"));
-
-    /* Add the New Account Button */
-    picker->new_button = gtk_button_new_with_mnemonic (_("_New Account"));
-
-    h_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_box_set_homogeneous (GTK_BOX (h_box), TRUE);
-
-    gtk_box_pack_start(GTK_BOX(h_box), picker->new_button, FALSE, FALSE, 0);
-    gtk_box_pack_start( GTK_BOX(box), h_box, FALSE, FALSE, 6);
-    gtk_widget_show (picker->new_button);
-    g_signal_connect(picker->new_button, "clicked",
-                     G_CALLBACK(gnc_import_add_account), picker);
-
-    build_acct_tree(picker);
-
-    g_signal_connect(picker->account_tree, "row-activated",
-                     G_CALLBACK(account_tree_row_activated_cb), picker);
-
-    g_object_unref(G_OBJECT(builder));
-    return picker;
-}
-
-
-/*******************************************************
- * gnc_import_account_assist_disable
- *
- * disables account picker input.
- *******************************************************/
-void
-gnc_import_account_assist_disable (AccountPickerDialog *picker, gboolean disable)
-{
-    gtk_widget_set_sensitive (picker->account_tree_sw, !disable);
-    gtk_widget_set_sensitive (picker->new_button, !disable);
-}
-
-
-/*******************************************************
- * gnc_import_account_assist_update
- *
- * updates the page and returns account found.
- *******************************************************/
-Account * gnc_import_account_assist_update (AccountPickerDialog *picker)
-{
-#define ACCOUNT_DESCRIPTION_MAX_SIZE 255
-
-    const gchar *retval_name = NULL;
-    gchar account_description_text[ACCOUNT_DESCRIPTION_MAX_SIZE + 1] = "";
-
-    ENTER("Default commodity received: %s", gnc_commodity_get_fullname( picker->new_account_default_commodity));
-    DEBUG("Default account type received: %s", xaccAccountGetTypeStr( picker->new_account_default_type));
-
-    /*DEBUG("Looking for account with online_id: %s", picker->account_online_id_value);*/
-    if (picker->account_online_id_value != NULL)
-    {
-        picker->retAccount =
-            gnc_account_foreach_descendant_until(gnc_get_current_root_account (),
-                    test_acct_online_id_match,
-                    /* This argument will only be used as a "const char*" */
-                    (void*)picker->account_online_id_value);
-    }
-
-    if (picker->account_human_description != NULL)
-    {
-        strncat(account_description_text, picker->account_human_description,
-                ACCOUNT_DESCRIPTION_MAX_SIZE - strlen(account_description_text));
-        strncat(account_description_text, "\n",
-                ACCOUNT_DESCRIPTION_MAX_SIZE - strlen(account_description_text));
-    }
-    if (picker->account_online_id_value != NULL)
-    {
-        strncat(account_description_text, _("(Full account ID: "),
-                ACCOUNT_DESCRIPTION_MAX_SIZE - strlen(account_description_text));
-        strncat(account_description_text, picker->account_online_id_value,
-                ACCOUNT_DESCRIPTION_MAX_SIZE - strlen(account_description_text));
-        strncat(account_description_text, ")",
-                ACCOUNT_DESCRIPTION_MAX_SIZE - strlen(account_description_text));
-    }
-    gtk_label_set_text(GTK_LABEL( picker->account_online_id_label), account_description_text);
-
-    if (picker->default_account == NULL)
-        gnc_tree_view_account_set_selected_account(picker->account_tree, picker->retAccount);
-    else
-        gnc_tree_view_account_set_selected_account(picker->account_tree, picker->default_account);
-
-    /*FIXME: DEBUG("WRITEME: Here we should check if an account type is compatible, currency matches, etc.\n"); */
-
-    /*DEBUG("Return value: %p%s%s%s",picker->retAccount,", account name:",xaccAccountGetName(picker->retAccount),"\n");*/
-    retval_name = picker->retAccount ? xaccAccountGetName(picker->retAccount) : NULL;
-    LEAVE("Selected account %p, %s", picker->retAccount, retval_name ? retval_name : "(null)");
-    return picker->retAccount;
 }
 
 /**@}*/

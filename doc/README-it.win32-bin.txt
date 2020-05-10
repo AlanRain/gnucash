@@ -11,9 +11,9 @@ contabilità assicurando il bilancio dei conti e l'accurattezza dei resoconti.
 
 Disponibilità di supporto
 
-FAQ online (in inglese):    http://wiki.gnucash.org/wiki/FAQ
-Mailing List:  http://wiki.gnucash.org/wiki/Mailing_Lists
-IRC (Chat):    canale #gnucash sul server irc.gnome.org; vedere anche http://wiki.gnucash.org/wiki/IRC
+FAQ online (in inglese):    https://wiki.gnucash.org/wiki/FAQ
+Mailing List:  https://wiki.gnucash.org/wiki/Mailing_Lists
+IRC (Chat):    canale #gnucash sul server irc.gnome.org; vedere anche https://wiki.gnucash.org/wiki/IRC
 
 Se si riscontrassero dei problemi o dei bug utilizzando il programma, è possibile comunicarli nel sistema
 di tracciamento dei bug di GnuCash denominato "Bugzilla":
@@ -42,10 +42,9 @@ Informazioni sul programma:
 
 GnuCash è un programma di contabilità libero e a codice aperto rilasciato con
 licenza GNU Public Licence (GPL). E' sviluppato con la collaborazione di
-12 programmatori provenienti da oltre 6 paesi.
+200+ programmatori.
 
 La programmazione di GnuCash è iniziata nel 1997 e il primo rilascio risale al 1998. 
 
 -------------------
 
-Questo è il file LEGGIMI di GnuCash 2.2.x dei pacchetti binari per Windows.

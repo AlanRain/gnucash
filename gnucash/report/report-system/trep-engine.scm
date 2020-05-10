@@ -18,6 +18,7 @@
 ;; - add subtotal summary grid
 ;; - by default, exclude closing transactions from the report
 ;; - converted to module in 2019
+;; - CSV export, exports the report headers and totals
 ;;
 ;; This program is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
@@ -41,6 +42,7 @@
 (use-modules (gnucash gettext))
 (use-modules (srfi srfi-11))
 (use-modules (srfi srfi-1))
+(use-modules (ice-9 match))
 
 ;; Define the strings here to avoid typos and make changes easier.
 
@@ -88,6 +90,8 @@
 (define optname-transaction-matcher (N_ "Transaction Filter"))
 (define optname-transaction-matcher-regex
   (N_ "Use regular expressions for transaction filter"))
+(define optname-transaction-matcher-exclude
+  (N_ "Transaction Filter excludes matched strings"))
 (define optname-reconcile-status (N_ "Reconcile Status"))
 (define optname-void-transactions (N_ "Void Transactions"))
 (define optname-closing-transactions (N_ "Closing transactions"))
@@ -459,6 +463,46 @@ Credit Card, and Income accounts."))
   (and (keylist-get-info (sortkey-list split-action?) sortkey 'split-sortvalue)
        (not (keylist-get-info (sortkey-list split-action?) sortkey 'sortkey))))
 
+(define (lists->csv lst)
+  ;; converts a list of lists into CSV
+  ;; this function aims to follow RFC4180, and will pad lists to
+  ;; ensure equal number of items per row.
+  ;; e.g. '(("from" "01/01/2010")
+  ;;        ("to" "31/12/2010")
+  ;;        ("total" 23500 30000 25/7 'sym))
+  ;; will output
+  ;;  "from","01/01/2010",,,
+  ;;  "to","31/12/2010",,,
+  ;;  "total",23500.0,30000.0,3.5714285714285716,sym
+  (define (string-sanitize-csv str)
+    (call-with-output-string
+      (lambda (port)
+        (display #\" port)
+        (string-for-each
+         (lambda (c)
+           (if (char=? c #\") (display #\" port))
+           (display c port))
+         str)
+        (display #\" port))))
+
+  (define max-items (apply max (map length lst)))
+
+  (define (strify obj)
+    (cond
+     ((not obj) "")
+     ((string? obj) (string-sanitize-csv obj))
+     ((number? obj) (number->string (exact->inexact obj)))
+     ((list? obj) (string-join
+                   (map strify
+                        (append obj
+                                (make-list (- max-items (length obj)) #f)))
+                   ","))
+     ((gnc:gnc-monetary? obj) (strify (gnc:gnc-monetary-amount obj)))
+     (else (object->string obj))))
+
+  (string-join (map strify lst) "\n"))
+
+
 ;;
 ;; Default Transaction Report
 ;;
@@ -561,6 +605,13 @@ blank, which will disable the filter.")
     (_ "By default the transaction filter will search substring only. Set this to true to \
 enable full POSIX regular expressions capabilities. '#work|#family' will match both \
 tags within description, notes or memo. ")
+    #f))
+
+  (gnc:register-trep-option
+   (gnc:make-simple-boolean-option
+    pagename-filter optname-transaction-matcher-exclude
+    "i3"
+    (_ "If this option is selected, transactions matching filter are excluded.")
     #f))
 
   (gnc:register-trep-option
@@ -983,7 +1034,8 @@ be excluded from periodic reporting.")
 ;; ;;;;;;;;;;;;;;;;;;;;
 ;; Here comes the big function that builds the whole table.
 
-(define (make-split-table splits options custom-calculated-cells)
+(define (make-split-table splits options custom-calculated-cells
+                          begindate)
 
   (define (opt-val section name)
     (let ((option (gnc:lookup-option options section name)))
@@ -1069,6 +1121,11 @@ be excluded from periodic reporting.")
          (is-multiline? (eq? (opt-val gnc:pagename-display optname-detail-level)
                              'multi-line))
          (export? (opt-val gnc:pagename-general optname-table-export)))
+
+    (define (acc-reverse? acc)
+      (if account-types-to-reverse
+          (memv (xaccAccountGetType acc) account-types-to-reverse)
+          (gnc-reverse-balance acc)))
 
     (define (column-uses? param)
       (cdr (assq param used-columns)))
@@ -1265,6 +1322,7 @@ be excluded from periodic reporting.")
          ;;                             column must be the credit side
          ;;         friendly-heading-fn (friendly-heading-fn account) to retrieve
          ;;                             friendly name for account debit/credit
+         ;;                             or 'bal-bf for balance-brought-forward
 
          (if (column-uses? 'amount-single)
              (list (vector (header-commodity (_ "Amount"))
@@ -1301,7 +1359,7 @@ be excluded from periodic reporting.")
          (if (column-uses? 'running-balance)
              (list (vector (_ "Running Balance")
                            running-balance #t #f #f
-                           (lambda (a) "")))
+                           'bal-bf))
              '()))))
 
     (define calculated-cells
@@ -1343,6 +1401,16 @@ be excluded from periodic reporting.")
                                (case level
                                  ((primary) optname-prime-sortkey)
                                  ((secondary) optname-sec-sortkey))))
+             (data (if (and (any (lambda (c) (eq? 'bal-bf (vector-ref c 5)))
+                                 calculated-cells)
+                            (memq sortkey ACCOUNT-SORTING-TYPES))
+                       ;; Translators: Balance b/f stands for "Balance
+                       ;; brought forward".
+                       (string-append data ": " (_ "Balance b/f"))
+                       data))
+             (renderer-fn (keylist-get-info
+                           (sortkey-list BOOK-SPLIT-ACTION)
+                           sortkey 'renderer-fn))
              (left-indent (case level
                             ((primary total) 0)
                             ((secondary) primary-indent)))
@@ -1353,30 +1421,35 @@ be excluded from periodic reporting.")
            table subheading-style
            (append
             (gnc:html-make-empty-cells left-indent)
-            (if (and (opt-val pagename-sorting optname-show-informal-headers)
-                     (column-uses? 'amount-double)
-                     (memq sortkey SORTKEY-INFORMAL-HEADERS))
-                (append
-                 (if export?
-                     (cons
-                      (gnc:make-html-table-cell data)
-                      (gnc:html-make-empty-cells
-                       (+ right-indent width-left-columns -1)))
-                     (list
-                      (gnc:make-html-table-cell/size
-                       1 (+ right-indent width-left-columns) data)))
-                 (map (lambda (cell)
-                        (gnc:make-html-text
-                         (gnc:html-markup-b
-                          ((vector-ref cell 5)
-                           ((keylist-get-info (sortkey-list BOOK-SPLIT-ACTION)
-                                              sortkey 'renderer-fn)
-                            split)))))
-                      calculated-cells))
+            (if export?
+                (cons
+                 (gnc:make-html-table-cell data)
+                 (gnc:html-make-empty-cells
+                  (+ right-indent width-left-columns -1)))
                 (list
                  (gnc:make-html-table-cell/size
-                  1 (+ right-indent width-left-columns width-right-columns)
-                  data))))))))
+                  1 (+ right-indent width-left-columns) data)))
+            (map
+             (lambda (cell)
+               (match (vector-ref cell 5)
+                 (#f #f)
+                 ('bal-bf
+                  (let* ((acc (xaccSplitGetAccount split))
+                         (bal (xaccAccountGetBalanceAsOfDate acc begindate)))
+                    (and (memq sortkey ACCOUNT-SORTING-TYPES)
+                         (gnc:make-html-table-cell/markup
+                          "number-cell"
+                          (gnc:make-gnc-monetary
+                           (xaccAccountGetCommodity acc)
+                           (if (acc-reverse? acc) (- bal) bal))))))
+                 (fn
+                  (and (opt-val pagename-sorting optname-show-informal-headers)
+                       (column-uses? 'amount-double)
+                       (memq sortkey SORTKEY-INFORMAL-HEADERS)
+                       (gnc:make-html-text
+                        (gnc:html-markup-b
+                         (fn (xaccSplitGetAccount split))))))))
+             calculated-cells))))))
 
     (define (add-subtotal-row subtotal-string subtotal-collectors
                               subtotal-style level row col)
@@ -1553,10 +1626,7 @@ be excluded from periodic reporting.")
 
     (define (add-split-row split cell-calculators row-style transaction-row?)
       (let* ((account (xaccSplitGetAccount split))
-             (reversible-account? (if account-types-to-reverse
-                                      (memv (xaccAccountGetType account)
-                                            account-types-to-reverse)
-                                      (gnc-reverse-balance account)))
+             (reversible-account? (acc-reverse? account))
              (cells (map (lambda (cell)
                            (let ((split->monetary (vector-ref cell 1)))
                              (vector (split->monetary split)
@@ -1670,7 +1740,7 @@ be excluded from periodic reporting.")
 
             (for-each
              (lambda (prime-collector sec-collector tot-collector value)
-               (when value
+               (when (gnc:gnc-monetary? value)
                  (let ((comm (gnc:gnc-monetary-commodity value))
                        (val (gnc:gnc-monetary-amount value)))
                  (prime-collector 'add comm val)
@@ -1746,7 +1816,18 @@ be excluded from periodic reporting.")
 
             (loop rest (not odd-row?) (1+ work-done)))))
 
-    (values table grid)))
+    (let ((csvlist (cond
+                    ((any (lambda (cell) (vector-ref cell 4)) calculated-cells)
+                     ;; there are mergeable cells. don't return a list.
+                     (N_ "CSV disabled for double column amounts"))
+
+                    (else
+                     (map
+                      (lambda (cell coll)
+                        (cons (vector-ref cell 0)
+                              (coll 'format gnc:make-gnc-monetary #f)))
+                      calculated-cells total-collectors)))))
+      (values table grid csvlist))))
 
 ;; grid data structure
 (define (make-grid)
@@ -1840,7 +1921,9 @@ be excluded from periodic reporting.")
 
 (define* (gnc:trep-renderer
           report-obj #:key custom-calculated-cells empty-report-message
-          custom-split-filter split->date split->date-include-false?)
+          custom-split-filter split->date split->date-include-false?
+          custom-source-accounts
+          export-type filename)
   ;; the trep-renderer is a define* function which, at minimum, takes
   ;; the report object
   ;;
@@ -1854,6 +1937,8 @@ be excluded from periodic reporting.")
   ;;     split->date returns #f. useful to include unreconciled splits in reconcile
   ;;     report. it can be useful for alternative date filtering, e.g. filter by
   ;;     transaction->invoice->payment date.
+  ;; #:export-type and #:filename - are provided for CSV export
+  ;; #:custom-source-accounts - alternate list-of-accounts to retrieve splits from
 
   (define options (gnc:report-options report-obj))
   (define (opt-val section name)
@@ -1861,29 +1946,28 @@ be excluded from periodic reporting.")
   (define BOOK-SPLIT-ACTION
     (qof-book-use-split-action-for-num-field (gnc-get-current-book)))
   (define (is-filter-member split account-list)
-    (let* ((txn (xaccSplitGetParent split))
-           (splitcount (xaccTransCountSplits txn))
-           (is-in-account-list? (lambda (acc) (member acc account-list))))
-      (cond
-       ((= splitcount 2)
-        (is-in-account-list?
-         (xaccSplitGetAccount (xaccSplitGetOtherSplit split))))
-       ((> splitcount 2)
-        (or-map is-in-account-list?
-                (map xaccSplitGetAccount
-                     (delete split (xaccTransGetSplitList txn)))))
-       (else #f))))
+    (define (same-split? s) (equal? s split))
+    (define (from-account? s) (member (xaccSplitGetAccount s) account-list))
+    (let lp ((splits (xaccTransGetSplitList (xaccSplitGetParent split))))
+      (match splits
+        (() #f)
+        (((? same-split?) . rest) (lp rest))
+        (((? from-account?) . _) #t)
+        ((_ . rest) (lp rest)))))
 
   (gnc:report-starting (opt-val gnc:pagename-general gnc:optname-reportname))
 
   (let* ((document (gnc:make-html-document))
          (account-matcher (opt-val pagename-filter optname-account-matcher))
-         (account-matcher-regexp (and (opt-val pagename-filter
-                                               optname-account-matcher-regex)
-                                      (catch 'regular-expression-syntax
-                                        (lambda () (make-regexp account-matcher))
-                                        (const 'invalid-regex))))
-         (c_account_0 (opt-val gnc:pagename-accounts optname-accounts))
+         (account-matcher-regexp
+          (and (opt-val pagename-filter optname-account-matcher-regex)
+               (if (defined? 'make-regexp)
+                   (catch 'regular-expression-syntax
+                     (lambda () (make-regexp account-matcher))
+                     (const 'invalid-account-regex))
+                   'no-guile-regex-support)))
+         (c_account_0 (or custom-source-accounts
+                          (opt-val gnc:pagename-accounts optname-accounts)))
          (c_account_1 (filter
                        (lambda (acc)
                          (if (regexp? account-matcher-regexp)
@@ -1903,9 +1987,13 @@ be excluded from periodic reporting.")
          (transaction-matcher (opt-val pagename-filter optname-transaction-matcher))
          (transaction-matcher-regexp
           (and (opt-val pagename-filter optname-transaction-matcher-regex)
-               (catch 'regular-expression-syntax
-                 (lambda () (make-regexp transaction-matcher))
-                 (const 'invalid-regex))))
+               (if (defined? 'make-regexp)
+                   (catch 'regular-expression-syntax
+                     (lambda () (make-regexp transaction-matcher))
+                     (const 'invalid-transaction-regex))
+                   'no-guile-regex-support)))
+         (transaction-filter-exclude?
+          (opt-val pagename-filter optname-transaction-matcher-exclude))
          (reconcile-status-filter
           (keylist-get-info reconcile-status-list
                             (opt-val pagename-filter optname-reconcile-status)
@@ -1981,16 +2069,33 @@ be excluded from periodic reporting.")
     (define (date-comparator? X Y)
       (generic-less? X Y 'date 'none #t))
 
+    (define (transaction-filter-match split)
+      (or (match? (xaccTransGetDescription (xaccSplitGetParent split)))
+          (match? (xaccTransGetNotes (xaccSplitGetParent split)))
+          (match? (xaccSplitGetMemo split))))
+
     (cond
      ((or (null? c_account_1)
-          (eq? account-matcher-regexp 'invalid-regex)
-          (eq? transaction-matcher-regexp 'invalid-regex))
+          (symbol? account-matcher-regexp)
+          (symbol? transaction-matcher-regexp))
 
-      ;; error condition: no accounts specified or obtained after filtering
       (gnc:html-document-add-object!
        document
-       (gnc:html-make-no-account-warning
-        report-title (gnc:report-id report-obj)))
+       (cond
+        ((null? c_account_1)
+         (gnc:html-make-no-account-warning report-title (gnc:report-id report-obj)))
+
+        ((symbol? account-matcher-regexp)
+         (gnc:html-make-generic-warning
+          report-title (gnc:report-id report-obj)
+          (string-append (_ "Error") " " (symbol->string account-matcher-regexp))
+          ""))
+
+        ((symbol? transaction-matcher-regexp)
+         (gnc:html-make-generic-warning
+          report-title (gnc:report-id report-obj)
+          (string-append (_ "Error") " " (symbol->string transaction-matcher-regexp))
+          ""))))
 
       ;; if an empty-report-message is passed by a derived report to
       ;; the renderer, display it here.
@@ -2054,9 +2159,9 @@ be excluded from periodic reporting.")
                     ((include) (is-filter-member split c_account_2))
                     ((exclude) (not (is-filter-member split c_account_2))))
                   (or (string-null? transaction-matcher)
-                      (match? (xaccTransGetDescription trans))
-                      (match? (xaccTransGetNotes trans))
-                      (match? (xaccSplitGetMemo split)))
+                      (if transaction-filter-exclude?
+                          (not (transaction-filter-match split))
+                          (transaction-filter-match split)))
                   (or (not custom-split-filter)
                       (custom-split-filter split)))))
          splits))
@@ -2081,8 +2186,9 @@ be excluded from periodic reporting.")
            (gnc:html-render-options-changed options))))
 
        (else
-        (let-values (((table grid)
-                      (make-split-table splits options custom-calculated-cells)))
+        (let-values (((table grid csvlist)
+                      (make-split-table splits options custom-calculated-cells
+                                        begindate)))
 
           (gnc:html-document-set-title! document report-title)
 
@@ -2091,6 +2197,7 @@ be excluded from periodic reporting.")
            (gnc:make-html-text
             (gnc:html-markup-h3
              (format #f
+                     ;; Translators: Both ~a's are dates
                      (_ "From ~a to ~a")
                      (qof-print-date begindate)
                      (qof-print-date enddate)))))
@@ -2114,6 +2221,30 @@ be excluded from periodic reporting.")
                                   generic<?)))
               (gnc:html-document-add-object!
                document (grid->html-table grid list-of-rows list-of-cols))))
+
+          (cond
+           ((and (eq? export-type 'csv)
+                 (string? filename)
+                 (not (string-null? filename)))
+            (let ((old-date-fmt (qof-date-format-get))
+                  (dummy (qof-date-format-set QOF-DATE-FORMAT-ISO))
+                  (infolist
+                   (list
+                    (list "from" (qof-print-date begindate))
+                    (list "to" (qof-print-date enddate)))))
+              (qof-date-format-set old-date-fmt)
+              (if (list? csvlist)
+                  (catch #t
+                    (lambda ()
+                      (call-with-output-file filename
+                        (lambda (p)
+                          (display (lists->csv (append infolist csvlist)) p))))
+                    (lambda (key . args)
+                      ;; Translators: ~a error type, ~a filename, ~s error details
+                      (let ((fmt (N_ "error ~a during csv output to ~a: ~s")))
+                        (gnc:gui-error (format #f fmt key filename args)
+                                       (format #f (_ fmt) key filename args)))))
+                  (gnc:gui-error csvlist (_ csvlist))))))
 
           (unless (and subtotal-table?
                        (opt-val pagename-sorting optname-show-subtotals-only))

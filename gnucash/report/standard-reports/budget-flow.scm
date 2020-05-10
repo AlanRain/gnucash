@@ -201,7 +201,7 @@
             (gnc:html-table-add-budget-accounts!
              html-table value budget period exchange-fn report-currency)))))
      acct-table)
-    ;; Reutrn assoc list
+    ;; Return assoc list
     accounts-totals))
 
 ;; Displays type-totals
@@ -276,7 +276,8 @@
 
          ;; calculate the exchange rates
          (exchange-fn (gnc:case-exchange-fn
-                       price-source report-currency #f))
+                       price-source report-currency
+                       (gnc-budget-get-period-end-date budget period)))
 
          ;; The HTML document
          (doc (gnc:make-html-document)))

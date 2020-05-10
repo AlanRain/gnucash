@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.20.0 -->
+<!-- Generated with glade 3.22.1 -->
 <interface>
   <requires lib="gtk+" version="3.10"/>
   <object class="GtkDialog" id="account_cascade_color_dialog">
     <property name="can_focus">False</property>
     <property name="title" translatable="yes">Cascade Account Color</property>
     <property name="type_hint">dialog</property>
+    <child>
+      <placeholder/>
+    </child>
     <child internal-child="vbox">
       <object class="GtkBox">
         <property name="can_focus">False</property>
@@ -32,7 +35,7 @@
             </child>
             <child>
               <object class="GtkButton" id="okbutton3">
-                <property name="label">_OK</property>
+                <property name="label" translatable="yes">_OK</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="can_default">True</property>
@@ -148,9 +151,6 @@
       <action-widget response="-6">cancelbutton3</action-widget>
       <action-widget response="-5">okbutton3</action-widget>
     </action-widgets>
-    <child>
-      <placeholder/>
-    </child>
   </object>
   <object class="GtkDialog" id="account_delete_dialog">
     <property name="can_focus">False</property>
@@ -159,6 +159,9 @@
     <property name="modal">True</property>
     <property name="destroy_with_parent">True</property>
     <property name="type_hint">dialog</property>
+    <child>
+      <placeholder/>
+    </child>
     <child internal-child="vbox">
       <object class="GtkBox" id="vbox100">
         <property name="visible">True</property>
@@ -229,6 +232,113 @@
               </packing>
             </child>
             <child>
+              <object class="GtkBox" id="subaccounts">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="hexpand">True</property>
+                <property name="orientation">vertical</property>
+                <child>
+                  <object class="GtkLabel" id="label101">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="halign">start</property>
+                    <property name="label" translatable="yes">&lt;b&gt;Sub-accounts&lt;/b&gt;</property>
+                    <property name="use_markup">True</property>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">False</property>
+                    <property name="position">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkGrid" id="grid101">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="hexpand">True</property>
+                    <property name="column_spacing">12</property>
+                    <child>
+                      <object class="GtkLabel" id="label8477420">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="halign">start</property>
+                        <property name="margin_left">15</property>
+                        <property name="label" translatable="yes">This account contains sub-accounts. What would you like to do with these sub-accounts?</property>
+                        <property name="wrap">True</property>
+                      </object>
+                      <packing>
+                        <property name="left_attach">0</property>
+                        <property name="top_attach">0</property>
+                        <property name="width">2</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkRadioButton" id="sa_mrb">
+                        <property name="label" translatable="yes">_Move to</property>
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="receives_default">False</property>
+                        <property name="halign">start</property>
+                        <property name="margin_left">15</property>
+                        <property name="use_underline">True</property>
+                        <property name="active">True</property>
+                        <property name="draw_indicator">True</property>
+                        <signal name="toggled" handler="gppat_populate_trans_mas_list" swapped="no"/>
+                        <signal name="toggled" handler="gppat_set_insensitive_iff_rb_active" object="subaccount_trans" swapped="yes"/>
+                      </object>
+                      <packing>
+                        <property name="left_attach">0</property>
+                        <property name="top_attach">2</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkRadioButton" id="sa_drb">
+                        <property name="label" translatable="yes">Delete all _subaccounts</property>
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="receives_default">False</property>
+                        <property name="halign">start</property>
+                        <property name="margin_left">15</property>
+                        <property name="use_underline">True</property>
+                        <property name="draw_indicator">True</property>
+                        <property name="group">sa_mrb</property>
+                        <signal name="toggled" handler="gppat_set_insensitive_iff_rb_active" object="sa_mas_hbox" swapped="yes"/>
+                      </object>
+                      <packing>
+                        <property name="left_attach">0</property>
+                        <property name="top_attach">1</property>
+                        <property name="width">2</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkBox" id="sa_mas_hbox">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="hexpand">True</property>
+                        <child>
+                          <placeholder/>
+                        </child>
+                      </object>
+                      <packing>
+                        <property name="left_attach">1</property>
+                        <property name="top_attach">2</property>
+                      </packing>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">1</property>
+                  </packing>
+                </child>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+            <child>
               <object class="GtkBox" id="transactions">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
@@ -256,7 +366,7 @@
                     <property name="column_spacing">12</property>
                     <child>
                       <object class="GtkRadioButton" id="trans_mrb">
-                        <property name="label" translatable="yes">M_ove to:</property>
+                        <property name="label" translatable="yes">M_ove to</property>
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="receives_default">False</property>
@@ -349,113 +459,6 @@
               </packing>
             </child>
             <child>
-              <object class="GtkBox" id="subaccounts">
-                <property name="visible">True</property>
-                <property name="can_focus">False</property>
-                <property name="hexpand">True</property>
-                <property name="orientation">vertical</property>
-                <child>
-                  <object class="GtkLabel" id="label101">
-                    <property name="visible">True</property>
-                    <property name="can_focus">False</property>
-                    <property name="halign">start</property>
-                    <property name="label" translatable="yes">&lt;b&gt;Sub-accounts&lt;/b&gt;</property>
-                    <property name="use_markup">True</property>
-                  </object>
-                  <packing>
-                    <property name="expand">False</property>
-                    <property name="fill">False</property>
-                    <property name="position">0</property>
-                  </packing>
-                </child>
-                <child>
-                  <object class="GtkGrid" id="grid101">
-                    <property name="visible">True</property>
-                    <property name="can_focus">False</property>
-                    <property name="hexpand">True</property>
-                    <property name="column_spacing">12</property>
-                    <child>
-                      <object class="GtkLabel" id="label8477420">
-                        <property name="visible">True</property>
-                        <property name="can_focus">False</property>
-                        <property name="halign">start</property>
-                        <property name="margin_left">15</property>
-                        <property name="label" translatable="yes">This account contains sub-accounts. What would you like to do with these sub-accounts?</property>
-                        <property name="wrap">True</property>
-                      </object>
-                      <packing>
-                        <property name="left_attach">0</property>
-                        <property name="top_attach">0</property>
-                        <property name="width">2</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkRadioButton" id="sa_mrb">
-                        <property name="label" translatable="yes">_Move to:</property>
-                        <property name="visible">True</property>
-                        <property name="can_focus">True</property>
-                        <property name="receives_default">False</property>
-                        <property name="halign">start</property>
-                        <property name="margin_left">15</property>
-                        <property name="use_underline">True</property>
-                        <property name="active">True</property>
-                        <property name="draw_indicator">True</property>
-                        <signal name="toggled" handler="gppat_populate_trans_mas_list" swapped="no"/>
-                        <signal name="toggled" handler="gppat_set_insensitive_iff_rb_active" object="subaccount_trans" swapped="yes"/>
-                      </object>
-                      <packing>
-                        <property name="left_attach">0</property>
-                        <property name="top_attach">2</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkRadioButton" id="sa_drb">
-                        <property name="label" translatable="yes">Delete all _subaccounts</property>
-                        <property name="visible">True</property>
-                        <property name="can_focus">True</property>
-                        <property name="receives_default">False</property>
-                        <property name="halign">start</property>
-                        <property name="margin_left">15</property>
-                        <property name="use_underline">True</property>
-                        <property name="draw_indicator">True</property>
-                        <property name="group">sa_mrb</property>
-                        <signal name="toggled" handler="gppat_set_insensitive_iff_rb_active" object="sa_mas_hbox" swapped="yes"/>
-                      </object>
-                      <packing>
-                        <property name="left_attach">0</property>
-                        <property name="top_attach">1</property>
-                        <property name="width">2</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkBox" id="sa_mas_hbox">
-                        <property name="visible">True</property>
-                        <property name="can_focus">False</property>
-                        <property name="hexpand">True</property>
-                        <child>
-                          <placeholder/>
-                        </child>
-                      </object>
-                      <packing>
-                        <property name="left_attach">1</property>
-                        <property name="top_attach">2</property>
-                      </packing>
-                    </child>
-                  </object>
-                  <packing>
-                    <property name="expand">False</property>
-                    <property name="fill">True</property>
-                    <property name="position">1</property>
-                  </packing>
-                </child>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="fill">False</property>
-                <property name="position">1</property>
-              </packing>
-            </child>
-            <child>
               <object class="GtkBox" id="subaccount_trans">
                 <property name="visible">True</property>
                 <property name="sensitive">False</property>
@@ -484,7 +487,7 @@
                     <property name="column_spacing">12</property>
                     <child>
                       <object class="GtkRadioButton" id="sa_trans_mrb">
-                        <property name="label" translatable="yes">M_ove to:</property>
+                        <property name="label" translatable="yes">M_ove to</property>
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="receives_default">False</property>
@@ -591,12 +594,14 @@
     </action-widgets>
   </object>
   <object class="GtkDialog" id="account_filter_by_dialog">
-    <property name="visible">False</property>
     <property name="can_focus">False</property>
     <property name="border_width">6</property>
     <property name="title" translatable="yes">Filter By...</property>
     <property name="type_hint">dialog</property>
     <signal name="response" handler="gppat_filter_response_cb" swapped="no"/>
+    <child>
+      <placeholder/>
+    </child>
     <child internal-child="vbox">
       <object class="GtkBox" id="vbox200">
         <property name="visible">True</property>
@@ -625,7 +630,7 @@
             </child>
             <child>
               <object class="GtkButton" id="okbutton1">
-                <property name="label">_OK</property>
+                <property name="label" translatable="yes">_OK</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="can_default">True</property>
@@ -893,6 +898,9 @@
     <property name="window_position">center</property>
     <property name="type_hint">dialog</property>
     <signal name="destroy" handler="gnc_account_window_destroy_cb" swapped="no"/>
+    <child>
+      <placeholder/>
+    </child>
     <child internal-child="vbox">
       <object class="GtkBox" id="vbox300">
         <property name="visible">True</property>
@@ -921,7 +929,7 @@
             </child>
             <child>
               <object class="GtkButton" id="ok_button">
-                <property name="label">_OK</property>
+                <property name="label" translatable="yes">_OK</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="can_default">True</property>
@@ -1004,7 +1012,7 @@
                             <property name="can_focus">False</property>
                             <property name="halign">start</property>
                             <property name="margin_left">12</property>
-                            <property name="label" translatable="yes">Account _name:</property>
+                            <property name="label" translatable="yes">Account _name</property>
                             <property name="use_underline">True</property>
                             <property name="mnemonic_widget">name_entry</property>
                             <property name="ellipsize">middle</property>
@@ -1020,7 +1028,7 @@
                             <property name="can_focus">False</property>
                             <property name="halign">start</property>
                             <property name="margin_left">12</property>
-                            <property name="label" translatable="yes">_Account code:</property>
+                            <property name="label" translatable="yes">_Account code</property>
                             <property name="use_underline">True</property>
                             <property name="mnemonic_widget">code_entry</property>
                           </object>
@@ -1035,7 +1043,7 @@
                             <property name="can_focus">False</property>
                             <property name="halign">start</property>
                             <property name="margin_left">12</property>
-                            <property name="label" translatable="yes">_Description:</property>
+                            <property name="label" translatable="yes">_Description</property>
                             <property name="use_underline">True</property>
                             <property name="mnemonic_widget">description_entry</property>
                           </object>
@@ -1050,7 +1058,7 @@
                             <property name="can_focus">False</property>
                             <property name="halign">start</property>
                             <property name="margin_left">12</property>
-                            <property name="label" translatable="yes">_Security/currency:</property>
+                            <property name="label" translatable="yes">_Security/currency</property>
                             <property name="use_underline">True</property>
                           </object>
                           <packing>
@@ -1077,7 +1085,7 @@
                             <property name="can_focus">False</property>
                             <property name="halign">start</property>
                             <property name="margin_left">12</property>
-                            <property name="label" translatable="yes">Smallest _fraction:</property>
+                            <property name="label" translatable="yes">Smallest _fraction</property>
                             <property name="use_underline">True</property>
                             <property name="mnemonic_widget">account_scu</property>
                           </object>
@@ -1092,7 +1100,7 @@
                             <property name="can_focus">False</property>
                             <property name="halign">start</property>
                             <property name="margin_left">12</property>
-                            <property name="label" translatable="yes">Account _Color:</property>
+                            <property name="label" translatable="yes">Account _Color</property>
                             <property name="use_underline">True</property>
                           </object>
                           <packing>
@@ -1145,7 +1153,7 @@
                             <property name="halign">start</property>
                             <property name="valign">start</property>
                             <property name="margin_left">12</property>
-                            <property name="label" translatable="yes">No_tes:</property>
+                            <property name="label" translatable="yes">No_tes</property>
                             <property name="use_underline">True</property>
                             <property name="mnemonic_widget">notes_text</property>
                           </object>
@@ -1499,7 +1507,7 @@
                         <property name="can_focus">False</property>
                         <property name="halign">start</property>
                         <property name="margin_left">12</property>
-                        <property name="label" translatable="yes">_Balance:</property>
+                        <property name="label" translatable="yes">_Balance</property>
                         <property name="use_underline">True</property>
                         <property name="justify">right</property>
                       </object>
@@ -1514,7 +1522,7 @@
                         <property name="can_focus">False</property>
                         <property name="halign">start</property>
                         <property name="margin_left">12</property>
-                        <property name="label" translatable="yes">_Date:</property>
+                        <property name="label" translatable="yes">_Date</property>
                         <property name="use_underline">True</property>
                         <property name="justify">right</property>
                       </object>
@@ -1625,13 +1633,15 @@
     <property name="page_increment">100</property>
   </object>
   <object class="GtkDialog" id="account_renumber_dialog">
-    <property name="visible">False</property>
     <property name="can_focus">False</property>
     <property name="border_width">6</property>
     <property name="title" translatable="yes">Renumber sub-accounts</property>
     <property name="modal">True</property>
     <property name="type_hint">dialog</property>
     <signal name="response" handler="gnc_account_renumber_response_cb" swapped="no"/>
+    <child>
+      <placeholder/>
+    </child>
     <child internal-child="vbox">
       <object class="GtkBox" id="vbox400">
         <property name="visible">True</property>
@@ -1692,7 +1702,7 @@
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
                 <property name="halign">start</property>
-                <property name="label" translatable="yes">Prefix:</property>
+                <property name="label" translatable="yes">Prefix</property>
               </object>
               <packing>
                 <property name="left_attach">0</property>
@@ -1728,7 +1738,7 @@
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
                 <property name="halign">start</property>
-                <property name="label" translatable="yes">Examples:</property>
+                <property name="label" translatable="yes">Examples</property>
               </object>
               <packing>
                 <property name="left_attach">0</property>
@@ -1751,7 +1761,7 @@
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
                 <property name="halign">start</property>
-                <property name="label" translatable="yes">Interval:</property>
+                <property name="label" translatable="yes">Interval</property>
               </object>
               <packing>
                 <property name="left_attach">0</property>

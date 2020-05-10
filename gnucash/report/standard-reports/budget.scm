@@ -48,9 +48,6 @@
 (define optname-show-subaccounts (N_ "Always show sub-accounts"))
 (define optname-accounts (N_ "Account"))
 
-(define optname-price-source (N_ "Price Source"))
-(define optname-show-rates (N_ "Show Exchange Rates"))
-(define optname-show-full-names (N_ "Show Full Account Names"))
 (define optname-select-columns (N_ "Select Columns"))
 (define optname-show-budget (N_ "Show Budget"))
 (define opthelp-show-budget (N_ "Display a column for the budget values."))
@@ -58,10 +55,10 @@
 (define opthelp-show-actual (N_ "Display a column for the actual values."))
 (define optname-show-difference (N_ "Show Difference"))
 (define opthelp-show-difference (N_ "Display the difference as budget - actual."))
+(define optname-accumulate (N_ "Use accumulated amounts"))
+(define opthelp-accumulate (N_ "Values are accumulated across periods."))
 (define optname-show-totalcol (N_ "Show Column with Totals"))
 (define opthelp-show-totalcol (N_ "Display a column with the row totals."))
-(define optname-rollup-budget (N_ "Roll up budget amounts to parent"))
-(define opthelp-rollup-budget (N_ "If parent account does not have its own budget value, use the sum of the child account budget values."))
 (define optname-show-zb-accounts (N_ "Include accounts with zero total balances and budget values"))
 (define opthelp-show-zb-accounts (N_ "Include accounts with zero total (recursive) balances and budget values in this report."))
 
@@ -140,49 +137,36 @@
       gnc:pagename-general optname-budget
       "a" (N_ "Budget to use.")))
 
-    (gnc:options-add-price-source!
-     options gnc:pagename-general optname-price-source "c" 'pricedb-nearest)
-
-    (gnc:register-option
-     options
+    (add-option
      (gnc:make-simple-boolean-option
-      gnc:pagename-general optname-show-full-names
-      "e" (N_ "Show full account names (including parent accounts).") #t))
+      gnc:pagename-general optname-accumulate
+      "b" opthelp-accumulate #f))
 
     (add-option
      (gnc:make-complex-boolean-option
-      gnc:pagename-general
-      optname-use-budget-period-range
-      "f"
-      opthelp-use-budget-period-range
-      #f
-      #f
-      ;; Make period only option widgets
-      ;; selectable only when we are running the report for a budget period
-      ;; range.
+      gnc:pagename-general optname-use-budget-period-range
+      "f" opthelp-use-budget-period-range #f #f
       (lambda (value)
-        (let ((enabler (lambda (target-opt enabled)
-                         (set-option-enabled
-                          options gnc:pagename-general target-opt enabled))))
-          (for-each
-           (lambda (target-opt)
-             (enabler target-opt value))
-           (list optname-budget-period-start optname-budget-period-end
-                 optname-period-collapse-before optname-period-collapse-after))
-          (enabler optname-budget-period-start-exact
-                   (and value
-                        (eq? 'manual ui-start-period-type)))
-          (enabler optname-budget-period-end-exact
-                   (and value
-                        (eq? 'manual ui-end-period-type)))
-          (set! ui-use-periods value)))))
+        (for-each
+         (lambda (opt)
+           (set-option-enabled options gnc:pagename-general opt value))
+         (list optname-budget-period-start optname-budget-period-end
+               optname-period-collapse-before optname-period-collapse-after))
+
+        (set-option-enabled options gnc:pagename-general
+                            optname-budget-period-start-exact
+                            (and value (eq? 'manual ui-start-period-type)))
+
+        (set-option-enabled options gnc:pagename-general
+                            optname-budget-period-end-exact
+                            (and value (eq? 'manual ui-end-period-type)))
+
+        (set! ui-use-periods value))))
 
     (add-option
      (gnc:make-multichoice-callback-option
       gnc:pagename-general optname-budget-period-start
-      "g1.1" opthelp-budget-period-start 'current
-      period-options
-      #f
+      "g1.1" opthelp-budget-period-start 'current period-options #f
       (lambda (new-val)
         (set-option-enabled options gnc:pagename-general
                             optname-budget-period-start-exact
@@ -201,9 +185,7 @@
     (add-option
      (gnc:make-multichoice-callback-option
       gnc:pagename-general optname-budget-period-end
-      "g2.1" opthelp-budget-period-end 'next
-      period-options
-      #f
+      "g2.1" opthelp-budget-period-end 'next period-options #f
       (lambda (new-val)
         (set-option-enabled options gnc:pagename-general
                             optname-budget-period-end-exact
@@ -231,15 +213,15 @@
       "g4" opthelp-period-collapse-after #t))
 
     (gnc:options-add-account-selection!
-     options gnc:pagename-accounts
-     optname-display-depth optname-show-subaccounts
-     optname-accounts "a" 2
+     options gnc:pagename-accounts optname-display-depth
+     optname-show-subaccounts optname-accounts "a" 2
      (lambda ()
        (gnc:filter-accountlist-type
         (list ACCT-TYPE-ASSET ACCT-TYPE-LIABILITY ACCT-TYPE-INCOME
               ACCT-TYPE-EXPENSE)
         (gnc-account-get-descendants-sorted (gnc-get-current-root-account))))
      #f)
+
     (add-option
      (gnc:make-simple-boolean-option
       gnc:pagename-accounts optname-bottom-behavior
@@ -262,10 +244,6 @@
      (gnc:make-simple-boolean-option
       gnc:pagename-display optname-show-totalcol
       "s4" opthelp-show-totalcol #f))
-    (add-option
-     (gnc:make-simple-boolean-option
-      gnc:pagename-display optname-rollup-budget
-      "s4" opthelp-rollup-budget #f))
     (add-option
      (gnc:make-simple-boolean-option
       gnc:pagename-display optname-show-zb-accounts
@@ -291,8 +269,8 @@
          (show-actual? (get-val params 'show-actual))
          (show-budget? (get-val params 'show-budget))
          (show-diff? (get-val params 'show-difference))
+         (accumulate? (get-val params 'use-envelope))
          (show-totalcol? (get-val params 'show-totalcol))
-         (rollup-budget? (get-val params 'rollup-budget))
          (use-ranges? (get-val params 'use-ranges))
          (num-rows (gnc:html-acct-table-num-rows acct-table))
          (numcolumns (gnc:html-table-num-columns html-table))
@@ -339,7 +317,7 @@
                   (gnc-budget-get-account-period-actual-value budget acct period))
                 periodlist)))
 
-    ;; Adds a line to tbe budget report.
+    ;; Adds a line to the budget report.
     ;;
     ;; Parameters:
     ;;   html-table - html table being created
@@ -347,14 +325,19 @@
     ;;   colnum - starting column number
     ;;   budget - budget to use
     ;;   acct - account being displayed
-    ;;   rollup-budget? - rollup budget values for account children
-    ;;                    if account budget not set
     ;;   exchange-fn - exchange function (not used)
     (define (gnc:html-table-add-budget-line!
-             html-table rownum colnum budget acct rollup-budget?
+             html-table rownum colnum budget acct
              column-list exchange-fn)
       (let* ((comm (xaccAccountGetCommodity acct))
              (reverse-balance? (gnc-reverse-balance acct))
+             (maybe-negate (lambda (amt) (if reverse-balance? (- amt) amt)))
+             (unreversed? (gnc-using-unreversed-budgets
+                           (gnc-get-current-book))) ;fwd-compatibility
+             (allperiods (filter number? (gnc:list-flatten column-list)))
+             (total-periods (if (and accumulate? (not (null? allperiods)))
+                                (iota (1+ (apply max allperiods)))
+                                allperiods))
              (income-acct? (eqv? (xaccAccountGetType acct) ACCT-TYPE-INCOME)))
 
         ;; Displays a set of budget column values
@@ -370,51 +353,83 @@
         ;;   col - next column
         (define (disp-cols style-tag col0
                            bgt-val act-val dif-val)
-          (let* ((style-tag-neg (string-append style-tag "-neg"))
-                 (col1 (+ col0 (if show-budget? 1 0)))
+          (let* ((col1 (+ col0 (if show-budget? 1 0)))
                  (col2 (+ col1 (if show-actual? 1 0)))
                  (col3 (+ col2 (if show-diff? 1 0))))
             (if show-budget?
                 (gnc:html-table-set-cell/tag!
-                 html-table rownum col0 style-tag
+                 html-table rownum col0
+                 style-tag
                  (if (zero? bgt-val) "."
                      (gnc:make-gnc-monetary comm bgt-val))))
             (if show-actual?
                 (gnc:html-table-set-cell/tag!
                  html-table rownum col1
-                 (if (negative? act-val) style-tag-neg style-tag)
+                 style-tag
                  (gnc:make-gnc-monetary comm act-val)))
             (if show-diff?
                 (gnc:html-table-set-cell/tag!
                  html-table rownum col2
-                 (if (negative? dif-val) style-tag-neg style-tag)
+                 style-tag
                  (if (and (zero? bgt-val) (zero? act-val)) "."
                      (gnc:make-gnc-monetary comm dif-val))))
             col3))
 
         (let loop ((column-list column-list)
-                   (bgt-total 0)
-                   (act-total 0)
                    (current-col (1+ colnum)))
           (cond
 
            ((null? column-list)
             #f)
 
+           ;; fwd-compatibility: the next cond may be removed in master
+           ((and (eq? (car column-list) 'total) unreversed?)
+            (let* ((bgt-total (maybe-negate
+                               (gnc:get-account-periodlist-budget-value
+                                budget acct total-periods)))
+                   (act-total (maybe-negate
+                               (gnc:get-account-periodlist-actual-value
+                                budget acct total-periods)))
+                   (dif-total (- bgt-total act-total)))
+              (loop (cdr column-list)
+                    (disp-cols "total-number-cell" current-col
+                               bgt-total act-total dif-total))))
+
            ((eq? (car column-list) 'total)
-            (loop (cdr column-list)
-                  bgt-total
-                  act-total
-                  (disp-cols "total-number-cell" current-col
-                             bgt-total act-total
-                             (if income-acct?
-                                 (- act-total bgt-total)
-                                 (- bgt-total act-total)))))
+            (let* ((bgt-total (gnc:get-account-periodlist-budget-value
+                               budget acct total-periods))
+                   (act-total (gnc:get-account-periodlist-actual-value
+                               budget acct total-periods))
+                   (act-total (if reverse-balance? (- act-total) act-total))
+                   (dif-total (if income-acct?
+                                  (- act-total bgt-total)
+                                  (- bgt-total act-total))))
+              (loop (cdr column-list)
+                    (disp-cols "total-number-cell" current-col
+                               bgt-total act-total dif-total))))
+
+           ;; fwd-compatibility: the next cond may be removed in master
+           (unreversed?
+            (let* ((period-list (cond
+                                 ((list? (car column-list)) (car column-list))
+                                 (accumulate? (iota (1+ (car column-list))))
+                                 (else (list (car column-list)))))
+                   (bgt-val (maybe-negate
+                             (gnc:get-account-periodlist-budget-value
+                              budget acct period-list)))
+                   (act-val (maybe-negate
+                             (gnc:get-account-periodlist-actual-value
+                              budget acct period-list)))
+                   (dif-val (- bgt-val act-val)))
+              (loop (cdr column-list)
+                    (disp-cols "number-cell" current-col
+                               bgt-val act-val dif-val))))
 
            (else
-            (let* ((period-list (if (list? (car column-list))
-                                    (car column-list)
-                                    (list (car column-list))))
+            (let* ((period-list (cond
+                                 ((list? (car column-list)) (car column-list))
+                                 (accumulate? (iota (1+ (car column-list))))
+                                 (else (list (car column-list)))))
                    (bgt-val (gnc:get-account-periodlist-budget-value
                              budget acct period-list))
                    (act-abs (gnc:get-account-periodlist-actual-value
@@ -426,8 +441,6 @@
                                 (- act-val bgt-val)
                                 (- bgt-val act-val))))
               (loop (cdr column-list)
-                    (+ bgt-total bgt-val)
-                    (+ act-total act-val)
                     (disp-cols "number-cell" current-col
                                bgt-val act-val dif-val))))))))
 
@@ -484,15 +497,18 @@
               (when show-budget?
                 (gnc:html-table-set-cell/tag!
                  html-table 1 col0 "centered-label-cell"
-                 (_ "Bgt"))) ;; Translators: Abbreviation for "Budget"
+                 ;; Translators: Abbreviation for "Budget" amount
+                 (_ "Bgt")))
               (when show-actual?
                 (gnc:html-table-set-cell/tag!
                  html-table 1 col1 "centered-label-cell"
-                 (_ "Act"))) ;; Translators: Abbreviation for "Actual"
+                 ;; Translators: Abbreviation for "Actual" amount
+                 (_ "Act")))
               (when show-diff?
                 (gnc:html-table-set-cell/tag!
                  html-table 1 col2 "centered-label-cell"
-                 (_ "Diff"))) ;; Translators: Abbreviation for "Difference"
+                 ;; Translators: Abbreviation for "Difference" amount
+                 (_ "Diff")))
               (loop (cdr column-list)
                     col3))))))
 
@@ -553,7 +569,9 @@
     (define (calc-periods
              budget user-start user-end collapse-before? collapse-after? show-total?)
       (define (range start end)
-        (iota (- end start) start))
+        (if (< start end)
+            (iota (- end start) start)
+            (iota (- start end) end)))
       (let* ((num-periods (gnc-budget-get-num-periods budget))
              (range-start (or user-start 0))
              (range-end (if user-end (1+ user-end) num-periods))
@@ -605,7 +623,7 @@
                  (acct (get-val env 'account))
                  (exchange-fn (get-val env 'exchange-fn)))
             (gnc:html-table-add-budget-line!
-             html-table rownum colnum budget acct rollup-budget?
+             html-table rownum colnum budget acct
              column-info-list exchange-fn)
             (loop (1+ rownum)))))
 
@@ -634,8 +652,6 @@
          (accounts (get-option gnc:pagename-accounts
                                optname-accounts))
          (bottom-behavior (get-option gnc:pagename-accounts optname-bottom-behavior))
-         (rollup-budget? (get-option gnc:pagename-display
-                                     optname-rollup-budget))
          (show-zb-accts? (get-option gnc:pagename-display
                                      optname-show-zb-accounts))
          (use-ranges? (get-option gnc:pagename-general optname-use-budget-period-range))
@@ -645,14 +661,10 @@
          (include-collapse-after? (and use-ranges?
                                        (get-option gnc:pagename-general
                                                    optname-period-collapse-after)))
-         (show-full-names? (get-option gnc:pagename-general
-                                       optname-show-full-names))
          (doc (gnc:make-html-document))
-         (accounts (append accounts
-                           (filter (lambda (acc) (not (member acc accounts)))
-                                   (if show-subaccts?
-                                       (gnc:acccounts-get-all-subaccounts accounts)
-                                       '())))))
+         (accounts (if show-subaccts?
+                       (gnc:accounts-and-all-descendants accounts)
+                       accounts)))
     ;; end of defines
 
     (cond
@@ -685,6 +697,7 @@
                          (if show-zb-accts? 'show-leaf-acct 'omit-leaf-acct))
                    (list 'report-budget budget)))
              (accounts (sort accounts account-full-name<?))
+             (accumulate? (get-option gnc:pagename-general optname-accumulate))
              (acct-table (gnc:make-html-acct-table/env/accts env accounts))
              (paramsBudget
               (list
@@ -694,10 +707,9 @@
                      (get-option gnc:pagename-display optname-show-budget))
                (list 'show-difference
                      (get-option gnc:pagename-display optname-show-difference))
+               (list 'use-envelope accumulate?)
                (list 'show-totalcol
                      (get-option gnc:pagename-display optname-show-totalcol))
-               (list 'rollup-budget
-                     (get-option gnc:pagename-display optname-rollup-budget))
                (list 'use-ranges use-ranges?)
                (list 'collapse-before include-collapse-before?)
                (list 'collapse-after include-collapse-after?)
@@ -715,8 +727,14 @@
                                       gnc:optname-reportname)))
 
         (gnc:html-document-set-title!
-         doc (format #f (_ "~a: ~a")
-                     report-name (gnc-budget-get-name budget)))
+         doc (format #f "~a: ~a ~a"
+                     report-name (gnc-budget-get-name budget)
+                     ;; Translators: using accumulated amounts mean
+                     ;; budget will report on budgeted and actual
+                     ;; amounts from the beginning of budget, instead
+                     ;; of only using the budget-period amounts.
+                     (if accumulate? (_ "using accumulated amounts")
+                         "")))
 
         ;; We do this in two steps: First the account names...  the
         ;; add-account-balances will actually compute and add a

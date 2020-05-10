@@ -136,7 +136,7 @@ typedef struct GncPluginPageReportPrivate
 G_DEFINE_TYPE_WITH_PRIVATE(GncPluginPageReport, gnc_plugin_page_report, GNC_TYPE_PLUGIN_PAGE)
 
 #define GNC_PLUGIN_PAGE_REPORT_GET_PRIVATE(o)  \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_PLUGIN_PAGE_REPORT, GncPluginPageReportPrivate))
+   ((GncPluginPageReportPrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_PLUGIN_PAGE_REPORT))
 
 static void gnc_plugin_page_report_class_init( GncPluginPageReportClass *klass );
 static void gnc_plugin_page_report_init( GncPluginPageReport *plugin_page );
@@ -233,47 +233,25 @@ gnc_plugin_page_report_set_property( GObject *obj,
 
 }
 
-static gboolean
-gnc_plugin_page_report_focus (GtkWidget *widget)
-{
-    if (GTK_IS_WIDGET(widget))
-    {
-        if (!gtk_widget_is_focus (GTK_WIDGET(widget)))
-            gtk_widget_grab_focus (GTK_WIDGET(widget));
-    }
-    return FALSE;
-}
-
 /**
  * Whenever the current page is changed, if a report page is
  * the current page, set focus on the report.
  */
-static void
-gnc_plugin_page_report_main_window_page_changed (GncMainWindow *window,
-        GncPluginPage *plugin_page, gpointer user_data)
+static gboolean
+gnc_plugin_page_report_focus_widget (GncPluginPage *report_plugin_page)
 {
-    // We continue only if the plugin_page is a valid
-    if (!plugin_page || !GNC_IS_PLUGIN_PAGE(plugin_page))
-        return;
-
-    if (gnc_main_window_get_current_page (window) == plugin_page)
+    if (GNC_IS_PLUGIN_PAGE_REPORT(report_plugin_page))
     {
-        GncPluginPageReport *report;
-        GncPluginPageReportPrivate *priv;
-        GtkWidget *widget;
+        GncPluginPageReportPrivate *priv = GNC_PLUGIN_PAGE_REPORT_GET_PRIVATE(report_plugin_page);
+        GtkWidget *widget = gnc_html_get_widget (priv->html);
 
-        if (!GNC_IS_PLUGIN_PAGE_REPORT(plugin_page))
-            return;
-
-        report = GNC_PLUGIN_PAGE_REPORT(plugin_page);
-        priv = GNC_PLUGIN_PAGE_REPORT_GET_PRIVATE(report);
-        widget = gnc_html_get_widget(priv->html);
-
-        // The page changed signal is emitted multiple times so we need
-        // to use an idle_add to change the focus to the webkit widget
-        g_idle_remove_by_data (widget);
-        g_idle_add ((GSourceFunc)gnc_plugin_page_report_focus, widget);
+        if (GTK_IS_WIDGET(widget))
+        {
+            if (!gtk_widget_is_focus (GTK_WIDGET(widget)))
+                gtk_widget_grab_focus (GTK_WIDGET(widget));
+        }
     }
+    return FALSE;
 }
 
 static void
@@ -300,6 +278,7 @@ gnc_plugin_page_report_class_init (GncPluginPageReportClass *klass)
     gnc_plugin_page_class->page_name_changed = gnc_plugin_page_report_name_changed;
     gnc_plugin_page_class->update_edit_menu_actions = gnc_plugin_page_report_update_edit_menu;
     gnc_plugin_page_class->finish_pending   = gnc_plugin_page_report_finish_pending;
+    gnc_plugin_page_class->focus_page_function = gnc_plugin_page_report_focus_widget;
 
     // create the "reportId" property
     g_object_class_install_property( object_class,
@@ -418,8 +397,8 @@ gnc_plugin_page_report_create_widget( GncPluginPage *page )
 {
     GncPluginPageReport *report;
     GncPluginPageReportPrivate *priv;
-    GncMainWindow  *window;
     GtkWindow *topLvl;
+    GtkAction *action;
     URLType type;
     char * id_name;
     char * child_name;
@@ -427,6 +406,13 @@ gnc_plugin_page_report_create_widget( GncPluginPage *page )
     char * url_label = NULL;
 
     ENTER("page %p", page);
+
+#ifndef WEBKIT1
+    /* Hide the ExportPdf action for Webkit2 */
+    action = gnc_plugin_page_get_action (page, "FilePrintPDFAction");
+    gtk_action_set_sensitive (action, FALSE);
+    gtk_action_set_visible (action, FALSE);
+#endif
 
     report = GNC_PLUGIN_PAGE_REPORT(page);
     priv = GNC_PLUGIN_PAGE_REPORT_GET_PRIVATE(report);
@@ -458,7 +444,7 @@ gnc_plugin_page_report_create_widget( GncPluginPage *page )
     gnc_html_set_urltype_cb(priv->html, gnc_plugin_page_report_check_urltype);
     gnc_html_set_load_cb(priv->html, gnc_plugin_page_report_load_cb, report);
 
-    /* We need to call the load call back so the report appears to of been run
+    /* We need to call the load call back so the report appears to have been run
      so it will get saved properly if the report is not realized in session */
     id_name = g_strdup_printf("id=%d", priv->reportId );
     child_name = gnc_build_url( URL_TYPE_REPORT, id_name, NULL );
@@ -475,10 +461,9 @@ gnc_plugin_page_report_create_widget( GncPluginPage *page )
     g_signal_connect (G_OBJECT(GTK_WIDGET(priv->container)), "realize",
                       G_CALLBACK(gnc_plugin_page_report_realize_uri), page);
 
-    window = GNC_MAIN_WINDOW(GNC_PLUGIN_PAGE(page)->window);
-    g_signal_connect(window, "page_changed",
-                     G_CALLBACK(gnc_plugin_page_report_main_window_page_changed),
-                     page);
+    g_signal_connect (G_OBJECT(page), "inserted",
+                      G_CALLBACK(gnc_plugin_page_inserted_cb),
+                      NULL);
 
     gtk_widget_show_all( GTK_WIDGET(priv->container) );
     LEAVE("container %p", priv->container);
@@ -781,8 +766,11 @@ gnc_plugin_page_report_destroy_widget(GncPluginPage *plugin_page)
 
     widget = gnc_html_get_widget(priv->html);
 
+    // Remove the page_changed signal callback
+    gnc_plugin_page_disconnect_page_changed (GNC_PLUGIN_PAGE(plugin_page));
+
     // Remove the page focus idle function if present
-    g_idle_remove_by_data (widget);
+    g_idle_remove_by_data (plugin_page);
 
     if (priv->component_manager_id)
     {
@@ -929,6 +917,7 @@ gnc_plugin_page_report_recreate_page (GtkWidget *window,
             g_warning("error reading group %s key %s: %s",
                       group_name, keys[i], error->message);
             g_error_free(error);
+            g_strfreev (keys);
             LEAVE("bad value");
             return NULL;
         }
@@ -938,6 +927,7 @@ gnc_plugin_page_report_recreate_page (GtkWidget *window,
         if (!scm_integer_p(scm_id))
         {
             DEBUG("report id not an integer for key %s", keys[i]);
+            g_strfreev (keys);
             return NULL;
         }
 
@@ -949,6 +939,7 @@ gnc_plugin_page_report_recreate_page (GtkWidget *window,
             }
         }
     }
+    g_strfreev (keys);
 
     if (final_id == SCM_BOOL_F)
     {
@@ -1154,10 +1145,10 @@ gnc_plugin_page_report_constr_init(GncPluginPageReport *plugin_page, gint report
     gchar *saved_reports_path = gnc_build_userdata_path (SAVED_REPORTS_FILE);
     gchar *report_save_str = g_strdup_printf (
         _("Update the current report's saved configuration. "
-        "The report will be saved in the file %s. "), saved_reports_path);
+        "The report configuration will be saved in the file %s. "), saved_reports_path);
     gchar *report_saveas_str = g_strdup_printf (
-        _("Add the current report's configuration to the `Saved Report Configurations' menu. "
-        "The report will be saved in the file %s. "), saved_reports_path);
+        _("Add the current report's configuration to the `Reports->Saved Report Configurations' menu. "
+        "The report configuration will be saved in the file %s. "), saved_reports_path);
 
     GtkActionEntry report_actions[] =
     {
@@ -1171,6 +1162,7 @@ gnc_plugin_page_report_constr_init(GncPluginPageReport *plugin_page, gint report
             N_("Export the current report as a PDF document"),
             G_CALLBACK(gnc_plugin_page_report_exportpdf_cb)
         },
+
         {
             "EditCutAction", "edit-cut", N_("Cu_t"), "<primary>X",
             N_("Cut the current selection and copy it to clipboard"),
@@ -1873,7 +1865,7 @@ gnc_plugin_page_report_print_cb( GtkAction *action, GncPluginPageReport *report 
 #ifdef WEBKIT1
     gnc_html_print (priv->html, job_name, FALSE);
 #else
-    gnc_html_print (priv->html);
+    gnc_html_print (priv->html, job_name);
 #endif
 
     g_free (job_name);
@@ -1916,7 +1908,7 @@ gnc_plugin_page_report_exportpdf_cb( GtkAction *action, GncPluginPageReport *rep
 #ifdef WEBKIT1
     gnc_html_print (priv->html, job_name, TRUE);
 #else
-    gnc_html_print (priv->html);
+    gnc_html_print (priv->html, job_name);
 #endif
 
     if (owner)

@@ -21,7 +21,7 @@
 ; - copy the report to your .gnucash directory
 ; - specify a different module name below (eg mytaxinvoice)
 ; - refer to it from .gnucash/config.user
-; (see http://wiki.gnucash.org/wiki/Custom_Reports )
+; (see https://wiki.gnucash.org/wiki/Custom_Reports )
 (define-module (gnucash report taxinvoice))
 
 (use-modules (ice-9 local-eval))  ; for the-environment
@@ -80,7 +80,6 @@
 (define headingpage  (N_ "Headings 1"))
 (define headingpage2 (N_ "Headings 2"))
 (define notespage    (N_ "Notes"))
-;(define filespage    (N_ "Files"))
 (define displaypage  (N_ "Display"))
 (define elementspage			(N_ "Elements"))
 ; option names 
@@ -91,7 +90,6 @@
 (define optname-row-contact		(N_ "row: Contact"))
 (define optname-row-invoice-number	(N_ "row: Invoice Number"))
 (define optname-row-company-name	(N_ "row: Company Name"))
-(define optname-report-currency		(N_ "Report Currency"))
 (define optname-invoice-number-text	(N_ "Invoice number text"))
 (define optname-to-text			(N_ "To text"))
 (define optname-ref-text		(N_ "Ref text"))
@@ -151,11 +149,6 @@
       gnc:pagename-general gnc:optname-invoice-number 
       "a" "" (lambda () '()) 
       #f))        ;customers-only)) ;-- see above
-
-  (add-option
-    (gnc:make-currency-option
-      gnc:pagename-general optname-report-currency
-      "b" "" (gnc-default-report-currency)))
 
   ;; Elements page options
 (add-option (gnc:make-simple-boolean-option	elementspage	optname-col-date		"a" (N_ "Display the date?") #t))
@@ -282,7 +275,7 @@
          (opt-jobname-show          (opt-value elementspage  optname-jobname-show))
          (opt-jobnumber-show        (opt-value elementspage  optname-jobnumber-show))
          (opt-netprice              (opt-value elementspage  optname-netprice))
-         (opt-report-currency       (opt-value gnc:pagename-general optname-report-currency))
+         (opt-invoice-currency      (gncInvoiceGetCurrency opt-invoice))
          (opt-css-border-collapse   (if (opt-value displaypage optname-border-collapse) "border-collapse:collapse;"))
          (opt-css-border-color-th   (opt-value displaypage optname-border-color-th))
          (opt-css-border-color-td   (opt-value displaypage optname-border-color-td))
@@ -334,9 +327,7 @@
 
   (let ((options (options-generator)))
        (set-opt options headingpage optname-report-title (_ "Tax Invoice"))
-       ;(gnc:warn "title: " (gnc:option-value title-op))
        (set-opt options headingpage optname-unit-price (_ "Unit"))
-       ;(gnc:warn "unitprice: " (gnc:option-value unit-price-op))
        (set-opt options headingpage optname-tax-rate (_ "GST Rate"))
        (set-opt options headingpage optname-tax-amount (_ "GST Amount"))
        (set-opt options headingpage2 optname-amount-due (_ "Amount Due (inc GST)"))

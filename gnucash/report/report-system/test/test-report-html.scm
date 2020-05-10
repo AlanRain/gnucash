@@ -4,10 +4,32 @@
 
 (use-modules (gnucash engine test test-extras))
 (use-modules (gnucash report report-system))
+(use-modules (gnucash report report-system test test-extras))
+(use-modules (gnucash report stylesheets))
 (use-modules (srfi srfi-64))
+(use-modules (ice-9 pretty-print))
+(use-modules (sxml simple))
 (use-modules (gnucash engine test srfi64-extras))
+(use-modules (system vm coverage))
+
+(define (coverage-test)
+  (let* ((currfile (dirname (current-filename)))
+         (path (string-take currfile (string-rindex currfile #\/))))
+    (add-to-load-path path))
+  (call-with-values
+      (lambda()
+        (with-code-coverage run-test-proper))
+    (lambda (data result)
+      (let ((port (open-output-file "/tmp/lcov.info")))
+        (coverage-data->lcov data port)
+        (close port)))))
 
 (define (run-test)
+  (if #f
+      (coverage-test)
+      (run-test-proper)))
+
+(define (run-test-proper)
     (test-runner-factory gnc:test-runner)
     (test-begin "Testing/Temporary/test-report-html")
       ;; if (test-runner-factory gnc:test-runner) is commented out, this
@@ -17,11 +39,14 @@
     (test-html-objects)
     (test-html-cells)
     (test-html-table)
+    (test-gnc:html-table-add-labeled-amount-line!)
+    (test-gnc:make-html-acct-table/env/accts)
     (test-end "Testing/Temporary/test-report-html")
 )
 
 (define html-doc-header-no-title
-"<html>\n\
+"<!DOCTYPE html>
+<html dir='auto'>\n\
 <head>\n\
 <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />\n\
 </head><body>")
@@ -63,7 +88,8 @@
 
     (gnc:html-document-set-title! test-doc "HTML Document Title")
     (test-equal "HTML Document - Render with title"
-"<html>\n\
+"<!DOCTYPE html>
+<html dir='auto'>\n\
 <head>\n\
 <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />\n\
 <title>\n\
@@ -529,7 +555,7 @@ HTML Document Title</title></head><body></body>\n\
 
   (test-equal "HTML Text Object - Image"
     (string-append html-doc-header-no-title
-                   "<img src=\"http://www.gnucash.org/images/banner5.png\" width=\"72\" height=\"48\" alt=\"GunCash web site\"  />"
+                   "<img src=\"https://www.gnucash.org/images/banner5.png\" width=\"72\" height=\"48\" alt=\"GunCash web site\"  />"
                    html-doc-tail
     )
     (let (
@@ -539,7 +565,7 @@ HTML Document Title</title></head><body></body>\n\
         (list 
           (gnc:make-html-text
             (gnc:html-markup-img
-              "http://www.gnucash.org/images/banner5.png"
+              "https://www.gnucash.org/images/banner5.png"
               '("width" "72")
               '("height" "48")
               '("alt" "GunCash web site")
@@ -774,5 +800,147 @@ HTML Document Title</title></head><body></body>\n\
       )
     (test-end "HTML Table - Table Rendering")
 
+    (test-begin "html-table arbitrary row/col modification")
+    (let ((doc (gnc:make-html-document))
+          (table (gnc:make-html-table)))
+      (gnc:html-table-set-cell! table 0 0 "x")
+      (test-equal "html-table-set-cell! 0 0"
+        "<table><tbody><tr><td rowspan=\"1\" colspan=\"1\"><string> x</td>\n</tr>\n</tbody>\n</table>\n"
+        (string-concatenate
+         (gnc:html-document-tree-collapse
+          (gnc:html-table-render table doc))))
+
+      (gnc:html-table-set-cell! table 2 2 "y" "z")
+      (test-equal "html-table-set-cell! 2 2"
+        "<table><tbody><tr><td rowspan=\"1\" colspan=\"1\"><string> x</td>\n</tr>\n<tr></tr>\n<tr><td><string>  </td>\n<td><string>  </td>\n<td rowspan=\"1\" colspan=\"1\"><string> y<string> z</td>\n</tr>\n</tbody>\n</table>\n"
+        (string-concatenate
+         (gnc:html-document-tree-collapse
+          (gnc:html-table-render table doc))))
+
+      (let* ((table1 (gnc:make-html-table))
+             (cell (gnc:make-html-table-cell "ab")))
+        (gnc:html-table-set-cell! table1 1 4 cell)
+        (test-equal "html-table-set-cell! 1 4"
+          "<table><tbody><tr></tr>\n<tr><td><string>  </td>\n<td><string>  </td>\n<td><string>  </td>\n<td><string>  </td>\n<td rowspan=\"1\" colspan=\"1\"><string> ab</td>\n</tr>\n</tbody>\n</table>\n"
+          (string-concatenate
+           (gnc:html-document-tree-collapse
+            (gnc:html-table-render table1 doc))))
+
+        (gnc:html-table-set-cell/tag! table1 1 4 "tag" cell)
+        (test-equal "html-table-set-cell/tag! 1 4"
+          "<table><tbody><tr></tr>\n<tr><td><string>  </td>\n<td><string>  </td>\n<td><string>  </td>\n<td><string>  </td>\n<tag rowspan=\"1\" colspan=\"1\"><string> ab</tag>\n</tr>\n</tbody>\n</table>\n"
+          (string-concatenate
+           (gnc:html-document-tree-collapse
+            (gnc:html-table-render table1 doc))))))
+    (test-end "html-table arbitrary row/col modification")
+
+    (test-begin "html-table-cell renderers")
+    (let ((doc (gnc:make-html-document))
+          (cell (gnc:make-html-table-cell 4)))
+      (test-equal "html-table-cell renders correctly"
+        "<td rowspan=\"1\" colspan=\"1\"><number> 4</td>\n"
+        (string-concatenate
+         (gnc:html-document-tree-collapse
+          (gnc:html-table-cell-render cell doc)))))
+
+    ;; the following is tailor-made to test bug 797357. if the report
+    ;; system is refactored, this test will probably need fixing. it
+    ;; aims to ensure the table-cell class eg 'number-cell'
+    ;; 'total-number-cell' is augmented with a '-neg', and the
+    ;; resulting renderer renders as <td class='number-cell neg' ...>
+    (let* ((doc (gnc:make-html-document))
+           (comm-table (gnc-commodity-table-get-table (gnc-get-current-book)))
+           (USD (gnc-commodity-table-lookup comm-table "CURRENCY" "USD"))
+           (USD-neg10 (gnc:make-gnc-monetary USD -10))
+           (cell (gnc:make-html-table-cell/markup "number-cell" USD-neg10)))
+      (test-equal "html-table-cell negative-monetary -> tag gets -neg appended"
+        "number-cell-neg"
+        (cadr
+         (gnc:html-document-tree-collapse
+          (gnc:html-table-cell-render cell doc)))))
+    (test-end "html-table-cell renderers")
+
   (test-end "HTML Tables - without style sheets")
 )
+
+(define (test-gnc:html-table-add-labeled-amount-line!)
+
+  (define (table->html table)
+    (let ((doc (gnc:make-html-document)))
+      (string-concatenate
+       (gnc:html-document-tree-collapse
+        (gnc:html-table-render table doc)))))
+
+  (let ((table (gnc:make-html-table)))
+    (gnc:html-table-add-labeled-amount-line!
+     table #f #f #f "label" #f #f #f #f #f #f #f)
+    (test-equal "gnc:html-table-add-labeled-amount-line!"
+      "<table><tbody><tr><td rowspan=\"1\" colspan=\"1\"><string> <string> label</td>\n<td rowspan=\"1\" colspan=\"1\"><string>  </td>\n</tr>\n</tbody>\n</table>\n"
+      (table->html table)))
+
+  (let* ((table (gnc:make-html-table)))
+    (gnc:html-table-add-labeled-amount-line!
+     table 5 "tdd" #t "label1" 1 2 "label-markup"
+     "amount" 3 2 "amount-markup")
+    (test-equal "gnc:html-table-add-labeled-amount-line! all options"
+      "<table><tbody><tdd><label-markup rowspan=\"1\" colspan=\"1\"><string> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<string> label1</label-markup>\n<td rowspan=\"1\" colspan=\"1\"><hr /></td>\n<amount-markup rowspan=\"1\" colspan=\"1\"><string> amount</amount-markup>\n<td><string>  </td>\n</tdd>\n</tbody>\n</table>\n"
+      (table->html table))))
+
+(define (test-gnc:make-html-acct-table/env/accts)
+
+  ;; create html-document, add table, render, convert to sxml
+  (define (table->sxml table prefix)
+    (let* ((doc (gnc:make-html-document)))
+      (gnc:html-document-set-style-sheet! doc (gnc:html-style-sheet-find "Default"))
+      (gnc:html-document-add-object! doc table)
+      (let ((render (gnc:html-document-render doc)))
+        (call-with-output-file (format #f "/tmp/html-acct-table-~a.html" prefix)
+          (lambda (p)
+            (display render p)))
+        (xml->sxml render
+                   #:trim-whitespace? #t
+                   #:entities '((nbsp . "\xa0")
+                                (ndash . "­"))))))
+
+  (let* ((accounts-alist (create-test-data))
+         (accounts (map cdr accounts-alist)))
+
+    (let* ((table (gnc:make-html-table))
+           (get-balance (lambda (acc start-date end-date)
+                          (let ((coll (gnc:make-commodity-collector)))
+                            (coll 'add (xaccAccountGetCommodity acc) 10)
+                            coll)))
+           (acct-table (gnc:make-html-acct-table/env/accts
+                        `((get-balance-fn ,get-balance)
+                          (display-tree-depth 9))
+                        accounts)))
+      (gnc:html-table-add-account-balances table acct-table '())
+      (let ((sxml (table->sxml table "basic - combo 1")))
+        (test-equal "gnc:make-html-acct-table/env/accts combo 1"
+          '("Root" "Asset" "Bank" "GBP Bank" "Wallet" "Liabilities"
+            "Income" "Income-GBP" "Expenses" "Equity")
+          (sxml->table-row-col sxml 1 #f 1))))
+
+    (let* ((table (gnc:make-html-table))
+           (acct-table (gnc:make-html-acct-table/env/accts
+                        `((balance-mode pre-closing)
+                          (display-tree-depth 9))
+                        accounts)))
+      (gnc:html-table-add-account-balances table acct-table '())
+      (let ((sxml (table->sxml table "basic - combo 2")))
+        (test-equal "gnc:make-html-acct-table/env/accts combo 2"
+          '("Root" "Asset" "Bank" "GBP Bank" "Wallet" "Liabilities"
+            "Income" "Income-GBP" "Expenses" "Equity")
+          (sxml->table-row-col sxml 1 #f 1))))
+
+    (let* ((table (gnc:make-html-table))
+           (acct-table (gnc:make-html-acct-table/env/accts
+                        '((balance-mode pre-adjusting)
+                          (display-tree-depth 9))
+                        accounts)))
+      (gnc:html-table-add-account-balances table acct-table '())
+      (let ((sxml (table->sxml table "basic - combo 3")))
+        (test-equal "gnc:make-html-acct-table/env/accts combo 3"
+          '("Root" "Asset" "Bank" "GBP Bank" "Wallet" "Liabilities"
+            "Income" "Income-GBP" "Expenses" "Equity")
+          (sxml->table-row-col sxml 1 #f 1))))))

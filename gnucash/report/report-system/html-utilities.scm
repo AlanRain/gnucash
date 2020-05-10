@@ -122,18 +122,18 @@
                             "#F012BE" "#3D9970" "#39CCCC" "#f39c12"
                             "#e74c3c" "#e67e22" "#9b59b6" "#8e44ad"
                             "#16a085" "#d35400"))
-  (define (assign-colors i)
-    (if (<= num-colors i)
-        '()
-        (cons (list-ref base-colors
-                        (modulo i (length base-colors)))
-              (assign-colors (+ i 1)))))
-  (assign-colors 0))
+  (let lp ((i 0) (result '()) (colors base-colors))
+    (cond
+     ((<= num-colors i) (reverse result))
+     ((null? colors)    (lp (1+ i) (cons (car base-colors) result) (cdr base-colors)))
+     (else              (lp (1+ i) (cons (car colors) result) (cdr colors))))))
 
 ;; Appends a horizontal ruler to a html-table with the specified
 ;; colspan at, optionally, the specified column.
 (define (gnc:html-table-append-ruler/at! table colskip colspan)
   (define empty-cell '())
+  (issue-deprecation-warning
+   "gnc:html-table-append-ruler/at! is deprecated.")
   (gnc:html-table-append-row! 
    table
    (append (make-list colskip empty-cell)
@@ -143,6 +143,8 @@
      
 (define (gnc:html-table-append-ruler/at/markup! table markup colskip colspan)
   (define empty-cell "")
+  (issue-deprecation-warning
+   "gnc:html-table-append-ruler/at/markup! is deprecated.")
   (gnc:html-table-append-row/markup! 
    table
    markup
@@ -152,9 +154,13 @@
       1 colspan (gnc:make-html-text (gnc:html-markup-hr)))))))
 
 (define (gnc:html-table-append-ruler! table colspan)
-  (gnc:html-table-append-ruler/at! table 0 colspan))
+  (gnc:html-table-append-row!
+   table (list (gnc:make-html-table-cell/size
+                1 colspan (gnc:make-html-text (gnc:html-markup-hr))))))
 
 (define (gnc:html-table-append-ruler/markup! table markup colspan)
+  (issue-deprecation-warning
+   "gnc:html-table-append-ruler/markup! is unused.")
   (gnc:html-table-append-ruler/at/markup! table markup 0 colspan))
 
 ;; Creates a table cell with some text in it. The cell will be created
@@ -166,6 +172,8 @@
   ;; instead of html-markup-b, just use the corresponding html-table-styles.
   (define default-style "text-cell")
   (define boldface-style "total-label-cell")
+  (issue-deprecation-warning
+   "gnc:html-acct-table-cell is unused.")
   (gnc:make-html-table-cell/size/markup 
    1 colspan 
    (if boldface? boldface-style default-style)
@@ -183,9 +191,8 @@
 	 table tree-depth
 	 current-depth my-name my-balance 
 	 reverse-balance? row-style boldface? group-header-line?)
-  ;; just a stupid little helper
-  (define (identity a)
-    a)
+  (issue-deprecation-warning
+   "gnc:html-acct-table-row-helper! is unused.")
   (gnc:html-table-append-row/markup! 
    table
    row-style
@@ -228,6 +235,8 @@
 	 current-depth my-name my-commodity balance 
 	 reverse-balance? is-stock-account? main-row-style other-rows-style 
 	 boldface? group-header-line?) 
+  (issue-deprecation-warning
+   "gnc:html-acct-table-comm-row-helper! is unused.")
   (let ((already-printed #f))
     ;; Adds one row to the table. my-name is the html-object
     ;; displayed in the name column; foreign-balance is the
@@ -393,6 +402,12 @@
 ;; <int> start-percent, delta-percent: Fill in the [start:start+delta]
 ;; section of the progress bar while running this function.
 ;;
+
+(define (gnc:first-html-build-acct-table . args)
+  (issue-deprecation-warning
+   "gnc:first-html-build-acct-table is deprecated. use gnc:html-build-acct-table.")
+  (apply gnc:html-build-acct-table args))
+
 (define (gnc:html-build-acct-table 
 	 start-date end-date 
 	 tree-depth show-subaccts? accounts 
@@ -401,37 +416,8 @@
 	 show-total? get-total-fn
 	 total-name group-types? show-parent-balance? show-parent-total? 
 	 show-other-curr? report-commodity exchange-fn show-zero-entries?)
-  ;; Select, here, which version of gnc:html-build-acct-table you want
-  ;; to use by default.
-  (define fn-version 'first)
-  (if (equal? fn-version 'second)
-      (gnc:second-html-build-acct-table 
-       start-date end-date 
-       tree-depth show-subaccts? accounts 
-       start-percent delta-percent
-       show-col-headers?
-       show-total? get-total-fn
-       total-name group-types? show-parent-balance? show-parent-total? 
-       show-other-curr? report-commodity exchange-fn show-zero-entries?)
-      (gnc:first-html-build-acct-table 
-       start-date end-date 
-       tree-depth show-subaccts? accounts 
-       start-percent delta-percent
-       show-col-headers?
-       show-total? get-total-fn
-       total-name group-types? show-parent-balance? show-parent-total? 
-       show-other-curr? report-commodity exchange-fn show-zero-entries?)
-      )
-  )
-
-(define (gnc:first-html-build-acct-table 
-	 start-date end-date 
-	 tree-depth show-subaccts? accounts 
-	 start-percent delta-percent
-	 show-col-headers?
-	 show-total? get-total-fn
-	 total-name group-types? show-parent-balance? show-parent-total? 
-	 show-other-curr? report-commodity exchange-fn show-zero-entries?)
+  (issue-deprecation-warning
+   "gnc:html-build-acct-table is unused.")
   (let ((table (gnc:make-html-table))
 	(work-to-do 0)
 	(work-done 0)
@@ -890,18 +876,5 @@
           "<link rel=\"stylesheet\" type=\"text/css\" href=\"file:///~a\" />\n"
           (gnc-path-find-localized-html-file file)))
 
-;; function to sanitize strings prior to sending to html
-(define (gnc:html-string-sanitize str)
-  (with-output-to-string
-    (lambda ()
-      (string-for-each
-       (lambda (c)
-         (display
-          (case c
-            ((#\&) "&amp;")
-            ((#\<) "&lt;")
-            ((#\>) "&gt;")
-            (else c))))
-       str))))
 
 

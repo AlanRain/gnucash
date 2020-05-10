@@ -142,6 +142,7 @@ gnc_ab_maketrans(GtkWidget *parent, Account *gnc_acc,
         GNC_AB_JOB_STATUS job_status;
         GncABImExContextImport *ieci = NULL;
 
+#ifndef AQBANKING6
         /* Get a GUI object */
         gui = gnc_GWEN_Gui_get(parent);
         if (!gui)
@@ -150,6 +151,7 @@ gnc_ab_maketrans(GtkWidget *parent, Account *gnc_acc,
             aborted = TRUE;
             goto repeat;
         }
+#endif
 
         /* Let the user enter the values */
         result = gnc_ab_trans_dialog_run_until_ok(td);
@@ -282,7 +284,7 @@ gnc_ab_maketrans(GtkWidget *parent, Account *gnc_acc,
             /* Ignore the return value of AB_Banking_ExecuteJobs(), as the job's
              * status always describes better whether the job was actually
              * transferred to and accepted by the bank.  See also
-             * http://lists.gnucash.org/pipermail/gnucash-de/2008-September/006389.html
+             * https://lists.gnucash.org/pipermail/gnucash-de/2008-September/006389.html
              */
 #ifdef AQBANKING6
             job_status = AB_Transaction_GetStatus(job);

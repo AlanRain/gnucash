@@ -28,6 +28,7 @@
 (use-modules (gnucash app-utils))
 (use-modules (gnucash report report-system))
 (use-modules (gnucash report standard-reports))
+(use-modules (srfi srfi-8))
 
 ;; to define gnc-build-url
 (gnc:module-load "gnucash/html" 0)
@@ -70,29 +71,17 @@
 
 (define (gnc:owner-report-text owner acc)
   (let* ((end-owner (gncOwnerGetEndOwner owner))
-	 (type (gncOwnerGetType end-owner))
-	 (ref #f))
-
-    (cond
-      ((eqv? type GNC-OWNER-CUSTOMER)
-       (set! ref "owner=c:"))
-
-      ((eqv? type GNC-OWNER-VENDOR)
-       (set! ref "owner=v:"))
-
-      ((eqv? type GNC-OWNER-EMPLOYEE)
-       (set! ref "owner=e:"))
-
-      (else (set! ref "unknown-type=")))
-
-    (if ref
-	(begin
-	  (set! ref (string-append ref (gncOwnerReturnGUID end-owner)))
-	  (if (not (null? acc))
-	      (set! ref (string-append ref "&acct="
-				       (gncAccountGetGUID acc))))
-	  (gnc-build-url URL-TYPE-OWNERREPORT ref ""))
-	ref)))
+         (type (gncOwnerGetType end-owner)))
+    (gnc-build-url
+     URL-TYPE-OWNERREPORT
+     (string-append
+      (cond ((eqv? type GNC-OWNER-CUSTOMER) "owner=c:")
+            ((eqv? type GNC-OWNER-VENDOR) "owner=v:")
+            ((eqv? type GNC-OWNER-EMPLOYEE) "owner=e:")
+            (else "unknown-type="))
+      (gncOwnerReturnGUID end-owner)
+      (if (null? acc) "" (string-append "&acct=" (gncAccountGetGUID acc))))
+     "")))
 
 ;; Creates a new report instance for the given invoice. The given
 ;; report-template-id must refer to an existing report template, which
@@ -115,6 +104,9 @@
 (use-modules (gnucash report receipt))
 (use-modules (gnucash report owner-report))
 (use-modules (gnucash report job-report))
+(use-modules (gnucash report lot-viewer))
+(use-modules (gnucash report new-aging))
+(use-modules (gnucash report new-owner-report))
 (use-modules (gnucash report payables))
 (use-modules (gnucash report receivables))
 (use-modules (gnucash report customer-summary))
@@ -126,10 +118,10 @@
 (define (gnc:receivables-report-create account title show-zeros?)
   (receivables-report-create-internal account title show-zeros?))
 
-(define (gnc:owner-report-create owner account)
+(define* (gnc:owner-report-create owner account #:key currency)
   ; Figure out an account to use if nothing exists here.
   (if (null? account)
-      (set! account (find-first-account-for-owner owner)))
+      (set! account (find-first-account-for-owner owner #:currency currency)))
   (owner-report-create owner account))
 
 (export gnc:invoice-report-create

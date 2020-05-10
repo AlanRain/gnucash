@@ -43,6 +43,7 @@
 .company-table > table * { padding: 0px; }
 .client-table > table * { padding: 0px; }
 .invoice-details-table > table * { padding: 0px; }
+@media print { .main-table > table { width: 100%; }}
 ")
 
 (define (date-col columns-used)
@@ -105,7 +106,7 @@
           (_ "Total"))))
 
 (define (monetary-or-percent numeric currency entry-type)
-  (if (gnc:entry-type-percent-p entry-type)
+  (if (eqv? entry-type GNC-AMT-TYPE-PERCENT)
       (string-append (gnc:default-html-gnc-numeric-renderer numeric #f) " " (_ "%"))
       (gnc:make-gnc-monetary currency numeric)))
 
@@ -178,15 +179,7 @@
    keylist))
 
 (define (multiline-to-html-text str)
-  ;; simple function - splits string containing #\newline into
-  ;; substrings, and convert to a gnc:make-html-text construct which
-  ;; adds gnc:html-markup-br after each substring.
-  (let loop ((list-of-substrings (string-split str #\newline))
-             (result '()))
-    (if (null? list-of-substrings)
-        (apply gnc:make-html-text (if (null? result) '() (reverse (cdr result))))
-        (loop (cdr list-of-substrings)
-              (cons* (gnc:html-markup-br) (car list-of-substrings) result)))))
+  (gnc:multiline-to-html-text str))
 
 (define (options-generator variant)
 
@@ -207,13 +200,13 @@
 
   (gnc:register-inv-option
    (gnc:make-text-option
-    (N_ "Layout") (N_ "CSS") "zz" "CSS code. This field specifies the CSS code
-for styling the invoice. Please see the exported report for the CSS class names."
+    (N_ "Layout") (N_ "CSS") "zz" (N_ "CSS code. This field specifies the CSS code \
+for styling the invoice. Please see the exported report for the CSS class names.")
     (keylist-get-info variant-list variant 'css)))
 
   (gnc:register-inv-option
    (gnc:make-pixmap-option
-    (N_ "Layout") (N_ "Picture Location") "zy" "Location for Picture"
+    (N_ "Layout") (N_ "Picture Location") "zy" (N_ "Location for Picture")
     ""))
 
   (gnc:register-inv-option
@@ -260,11 +253,6 @@ for styling the invoice. Please see the exported report for the CSS class names.
    (gnc:make-simple-boolean-option
     (N_ "Display Columns") (N_ "Total")
     "n" (N_ "Display the entry's value?") #t))
-
-  ;; company details can now be toggled via Layout tab
-  ;; and IMHO company-tax-id should be rendered if present
-  (gnc:register-inv-option (gnc:make-internal-option "Display" "My Company" #f))
-  (gnc:register-inv-option (gnc:make-internal-option "Display" "My Company ID" #f))
 
   (gnc:register-inv-option
    (gnc:make-simple-boolean-option
@@ -344,7 +332,7 @@ for styling the invoice. Please see the exported report for the CSS class names.
   (gnc:register-inv-option
    (gnc:make-simple-boolean-option
     (N_ "Display") (N_ "Payments")
-    "tc" (N_ "Display the payments applied to this invoice?") #f))
+    "tc" (N_ "Display the payments applied to this invoice?") #t))
 
   (gnc:register-inv-option
    (gnc:make-simple-boolean-option
@@ -718,8 +706,7 @@ for styling the invoice. Please see the exported report for the CSS class names.
    (string-append label ":")
    (gnc:make-html-div/markup
     "div-align-right"
-    (strftime date-format
-              (localtime date)))))
+    (gnc-print-time64 date date-format))))
 
 (define (make-company-table book)
   ;; single-column table. my name, address, and printdate
@@ -730,6 +717,7 @@ for styling the invoice. Please see the exported report for the CSS class names.
          (fax (gnc:company-info book gnc:*company-fax*))
          (email (gnc:company-info book gnc:*company-email*))
          (url (gnc:company-info book gnc:*company-url*))
+         (taxnr (gnc:option-get-value book gnc:*tax-label* gnc:*tax-nr-label*))
          (taxid (gnc:company-info book gnc:*company-id*)))
 
     (if (and name (not (string-null? name)))
@@ -766,6 +754,11 @@ for styling the invoice. Please see the exported report for the CSS class names.
         (gnc:html-table-append-row! table (list
                                            (gnc:make-html-div/markup
                                             "maybe-align-right company-tax-id" taxid))))
+
+    (if (and taxnr (not (string-null? taxnr)))
+        (gnc:html-table-append-row!
+         table (list (gnc:make-html-div/markup
+                      "maybe-align-right company-tax-nr" taxnr))))
 
     table))
 
@@ -931,6 +924,8 @@ for styling the invoice. Please see the exported report for the CSS class names.
  'in-menu? #t)
 
 (define (gnc:easy-invoice-report-create-internal invoice)
+  (issue-deprecation-warning
+   "gnc:easy-invoice-report-create-internal is unused")
   (let* ((options (gnc:make-report-options easy-invoice-guid))
          (invoice-op (gnc:lookup-option options gnc:pagename-general gnc:optname-invoice-number)))
     (gnc:option-set-value invoice-op invoice)
@@ -938,6 +933,8 @@ for styling the invoice. Please see the exported report for the CSS class names.
 (export gnc:easy-invoice-report-create-internal)
 
 (define (gnc:fancy-invoice-report-create-internal invoice)
+  (issue-deprecation-warning
+   "gnc:fancy-invoice-report-create-internal is unused")
   (let* ((options (gnc:make-report-options fancy-invoice-guid))
          (invoice-op (gnc:lookup-option options gnc:pagename-general gnc:optname-invoice-number)))
     (gnc:option-set-value invoice-op invoice)

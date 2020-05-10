@@ -20,6 +20,8 @@
 ;; Boston, MA  02110-1301,  USA       gnu@gnu.org
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(use-modules (ice-9 match))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Functions to get splits with interesting data from accounts.
 
@@ -295,27 +297,16 @@ construct with gnc:make-gnc-monetary and gnc:monetary->string instead.")
 ;; pricelist comes from
 ;; e.g. gnc:get-commodity-totalavg-prices. Returns a <gnc-numeric> or,
 ;; if pricelist was empty, #f.
-(define (gnc:pricelist-price-find-nearest
-         pricelist date)
-  (let* ((later (find (lambda (p)
-                        (< date (car p)))
-                      pricelist))
-         (earlierlist (take-while
-                       (lambda (p)
-                         (>= date (car p)))
-                       pricelist))
-         (earlier (and (not (null? earlierlist))
-                       (last earlierlist))))
-
-    (if (and earlier later)
-        (if (< (abs (- date (car earlier)))
-               (abs (- date (car later))))
-            (cadr earlier)
-            (cadr later))
-        (or
-         (and earlier (cadr earlier))
-         (and later (cadr later))))))
-
+(define (gnc:pricelist-price-find-nearest pricelist date)
+  (let lp ((pricelist pricelist))
+    (match pricelist
+      (() #f)
+      (((date price)) price)
+      (((date1 price1) (date2 price2) . rest)
+       (cond
+        ((< date2 date) (lp (cdr pricelist)))
+        ((< (- date date1) (- date2 date)) price1)
+        (else price2))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Functions to get one price at a given time (i.e. not time-variant).
@@ -627,10 +618,9 @@ construct with gnc:make-gnc-monetary and gnc:monetary->string instead.")
   ;; total balances from get-exchange-totals are divided by each
   ;; other.
   (map
-   (lambda (e)
-     (list (car e)
-           (abs (/ ((cdadr e) 'total #f)
-                   ((caadr e) 'total #f)))))
+   (match-lambda
+     ((comm (domestic . foreign))
+      (list comm (abs (/ (foreign 'total #f) (domestic 'total #f))))))
    (gnc:get-exchange-totals report-commodity end-date)))
 
 (define (gnc:make-exchange-cost-alist report-commodity end-date)
@@ -638,12 +628,10 @@ construct with gnc:make-gnc-monetary and gnc:monetary->string instead.")
   ;; total balances from get-exchange-totals are divided by each
   ;; other.
   (map
-   (lambda (e)
-     (list (car e)
-           (if (zero? ((caadr e) 'total #f))
-               0
-               (abs (/ ((cdadr e) 'total #f)
-                       ((caadr e) 'total #f))))))
+   (match-lambda
+     ((comm (domestic . foreign))
+      (let ((denom (domestic 'total #f)))
+        (list comm (if (zero? denom) 0 (abs (/ (foreign 'total #f) denom)))))))
    (gnc:get-exchange-cost-totals report-commodity end-date)))
 
 
@@ -803,7 +791,6 @@ construct with gnc:make-gnc-monetary and gnc:monetary->string instead.")
   ;;Used in weighted-average gnc:case-exchange-time-fn only.
   (gnc:debug "foreign " (gnc:monetary->string foreign))
   (gnc:debug "domestic " (gnc-commodity-get-printname domestic))
-  (gnc:debug "pricealist " pricealist)
   (and (record? foreign)
        (gnc:gnc-monetary? foreign)
        date
@@ -856,9 +843,19 @@ construct with gnc:make-gnc-monetary and gnc:monetary->string instead.")
 ;; the value of 'source-option', whose possible values are set in
 ;; gnc:options-add-price-source!.
 ;;
-;; <int> start-percent, delta-percent: Fill in the [start:start+delta]
+;; arguments:
+;; source-option: symbol 'average-cost 'weighted-average
+;;                'pricedb-nearest 'pricedb-latest
+;; report-currency: the target currency
+;; commodity-list: the list of commodities to generate an exchange-fn for
+;; to-date-tp (time64): last date to analyse transactions
+;; start-percent, delta-percent: Fill in the [start:start+delta]
 ;; section of the progress bar while running this function.
 ;;
+;; returns: a function which takes 3 arguments, and returns a gnc-monetary
+;;    foreign  - foreign commodity/currency
+;;    domestic - a gnc-monetary pair
+;;    date     - time64 price
 (define (gnc:case-exchange-time-fn
          source-option report-currency commodity-list to-date-tp
          start-percent delta-percent)
@@ -873,6 +870,7 @@ construct with gnc:make-gnc-monetary and gnc:monetary->string instead.")
                                (gnc:get-commoditylist-totalavg-prices
                                 commodity-list report-currency to-date-tp
                                 start-percent delta-percent)))
+                          (gnc:debug "weighted-average pricealist " pricealist)
                           (lambda (foreign domestic date)
                             (gnc:exchange-by-pricealist-nearest
                              pricealist foreign domestic date))))
@@ -915,7 +913,7 @@ construct with gnc:make-gnc-monetary and gnc:monetary->string instead.")
 ;; CAS: Previously, the exchange-fn was not optional -- we would crash
 ;; if it was invalid.  I've changed this so that when exchange-fn is
 ;; #f, #f is returned.  Since #f is already returned when foreign is
-;; #f, and since any previous dependance on some behavior for the case
+;; #f, and since any previous dependence on some behavior for the case
 ;; where exchange-fn was #f would've crashed, I think this change is
 ;; safe.
 ;;
@@ -924,27 +922,23 @@ construct with gnc:make-gnc-monetary and gnc:monetary->string instead.")
 (define (gnc:sum-collector-commodity foreign domestic exchange-fn)
   (and foreign
        exchange-fn
-       (let ((balance (gnc:make-commodity-collector)))
-         (foreign
-          'format
-          (lambda (curr val)
-            (if (gnc-commodity-equiv domestic curr)
-                (balance 'add domestic val)
-                (balance 'add domestic
-                         (gnc:gnc-monetary-amount
-                          ;; BUG?: this bombs if the exchange-fn
-                          ;; returns #f instead of an actual
-                          ;; <gnc:monetary>.  Better to just return #f.
-                          (exchange-fn (gnc:make-gnc-monetary curr val)
-                                       domestic)))))
-          #f)
-         (balance 'getmonetary domestic #f))))
+       (gnc:make-gnc-monetary
+        domestic
+        (apply + (map
+                  (lambda (mon)
+                    (gnc-numeric-convert
+                     (gnc:gnc-monetary-amount (exchange-fn mon domestic))
+                     (gnc-commodity-get-fraction domestic)
+                     GNC-RND-ROUND))
+                  (foreign 'format gnc:make-gnc-monetary #f))))))
 
 ;; As above, but adds only the commodities of other stocks and
 ;; mutual-funds. Returns a commodity-collector, (not a <gnc:monetary>)
 ;; which (still) may have several different commodities in it -- if
 ;; there have been different *currencies*, not only stocks.
 (define (gnc:sum-collector-stocks foreign domestic exchange-fn)
+  (issue-deprecation-warning
+   "gnc:sum-collector-stocks is never used in code.")
   (and foreign
        (let ((balance (gnc:make-commodity-collector)))
          (foreign
@@ -976,7 +970,7 @@ construct with gnc:make-gnc-monetary and gnc:monetary->string instead.")
 (define (gnc:uniform-commodity? amt report-commodity)
   ;; function to see if the commodity-collector amt
   ;; contains any foreign commodities
-  (let ((list-of-commodities (amt 'format (lambda (comm amt) comm) #f)))
-    (or (null? list-of-commodities)
-        (and (null? (cdr list-of-commodities))
-             (gnc-commodity-equiv report-commodity (car list-of-commodities))))))
+  (match (amt 'format (lambda (comm amt) comm) #f)
+    (() #t)
+    ((comm) (gnc-commodity-equiv report-commodity comm))
+    (_ #f)))

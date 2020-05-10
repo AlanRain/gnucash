@@ -2134,7 +2134,7 @@ gnc_account_cascade_color_dialog (GtkWidget *window, Account *account)
     GdkRGBA color;
     gint response;
 
-    // check if we actualy do have sub accounts
+    // check if we actually do have sub accounts
     g_return_if_fail (gnc_account_n_children (account) > 0);
 
     builder = gtk_builder_new();
@@ -2153,7 +2153,7 @@ gnc_account_cascade_color_dialog (GtkWidget *window, Account *account)
                       G_CALLBACK(default_color_button_cb), (gpointer)color_button);
 
     string = g_strdup_printf(_( "Set the account color for account '%s' "
-                                "including all sub-accounts to the selected color:"),
+                                "including all sub-accounts to the selected color"),
                              gnc_account_get_full_name(account));
     gtk_label_set_text (GTK_LABEL(color_label), string);
     g_free (string);

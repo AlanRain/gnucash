@@ -27,6 +27,10 @@
 
 (use-modules (gnucash core-utils))
 
+(eval-when (compile load eval expand)
+  (load-extension "libgncmod-engine" "scm_init_sw_engine_module"))
+(use-modules (sw_engine))
+
 ;; Load the srfis (eventually, we should see where these are needed
 ;; and only have the use-modules statements in those files).
 (use-modules (srfi srfi-1))
@@ -42,6 +46,8 @@
 (export gnc:msg)
 (export gnc:debug)
 (export addto!)
+(export sort-and-delete-duplicates)
+(export gnc:list-flatten)
 
 ;; Do this stuff very early -- but other than that, don't add any
 ;; executable code until the end of the file if you can help it.
@@ -63,7 +69,8 @@
   (gnc-scm-log-msg (strify items)))
 
 (define (gnc:debug . items)
-  (gnc-scm-log-debug (strify items)))
+  (when (qof-log-check "gnc.scm" QOF-LOG-DEBUG)
+    (gnc-scm-log-debug (strify items))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; the following functions are initialized to log message to tracefile
@@ -155,3 +162,101 @@
   (string-replace-substring
    s1 s2 s3 0 (string-length s1) (max 0 (1- start))
    (and (positive? end-after) (+ (max 0 (1- start)) (1- end-after)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; function to sanitize strings. the resulting string can be safely
+;; added to html.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-public (gnc:html-string-sanitize str)
+  (with-output-to-string
+    (lambda ()
+      (string-for-each
+       (lambda (c)
+         (display
+          (case c
+            ((#\&) "&amp;")
+            ((#\<) "&lt;")
+            ((#\>) "&gt;")
+            (else c))))
+       str))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; avoid using strftime, still broken in guile-2.2. see explanation at
+;; https://lists.gnu.org/archive/html/bug-guile/2019-05/msg00003.html
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(let ((strftime-old strftime))
+  (set! strftime
+    (lambda args
+      (gnc:warn "strftime may be buggy. use gnc-print-time64 instead.")
+      (apply strftime-old args))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; a basic sort-and-delete-duplicates. because delete-duplicates
+;; usually run in O(N^2) and if the list must be sorted, it's more
+;; efficient to sort first then delete adjacent elements. guile-2.0
+;; uses quicksort internally.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define* (sort-and-delete-duplicates lst < #:optional (= =))
+  (define (kons a b) (if (and (pair? b) (= a (car b))) b (cons a b)))
+  (reverse (fold kons '() (sort lst <))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; flattens an arbitrary deep nested list into simple list.  this is
+;; probably the most efficient algorithm available. '(1 2 (3 4)) -->
+;; '(1 2 3 4) thanks to manumanumanu on #guile
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (gnc:list-flatten . lst)
+  (let loop ((lst lst) (acc '()))
+    (cond
+     ((null? lst) acc)
+     ((pair? lst) (loop (car lst) (loop (cdr lst) acc)))
+     (else (cons lst acc)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; compatibility hack for fixing guile-2.0 string handling. this code
+;; may be removed when minimum guile is 2.2 or later. see
+;; https://lists.gnu.org/archive/html/guile-user/2019-04/msg00012.html
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(when (string=? (effective-version) "2.0")
+  ;; When using Guile 2.0.x, use monkey patching to change the
+  ;; behavior of string ports to use UTF-8 as the internal encoding.
+  ;; Note that this is the default behavior in Guile 2.2 or later.
+  (let* ((mod                     (resolve-module '(guile)))
+         (orig-open-input-string  (module-ref mod 'open-input-string))
+         (orig-open-output-string (module-ref mod 'open-output-string))
+         (orig-object->string     (module-ref mod 'object->string))
+         (orig-simple-format      (module-ref mod 'simple-format)))
+
+    (define (open-input-string str)
+      (with-fluids ((%default-port-encoding "UTF-8"))
+        (orig-open-input-string str)))
+
+    (define (open-output-string)
+      (with-fluids ((%default-port-encoding "UTF-8"))
+        (orig-open-output-string)))
+
+    (define (object->string . args)
+      (with-fluids ((%default-port-encoding "UTF-8"))
+        (apply orig-object->string args)))
+
+    (define (simple-format . args)
+      (with-fluids ((%default-port-encoding "UTF-8"))
+        (apply orig-simple-format args)))
+
+    (define (call-with-input-string str proc)
+      (proc (open-input-string str)))
+
+    (define (call-with-output-string proc)
+      (let ((port (open-output-string)))
+        (proc port)
+        (get-output-string port)))
+
+    (module-set! mod 'open-input-string       open-input-string)
+    (module-set! mod 'open-output-string      open-output-string)
+    (module-set! mod 'object->string          object->string)
+    (module-set! mod 'simple-format           simple-format)
+    (module-set! mod 'call-with-input-string  call-with-input-string)
+    (module-set! mod 'call-with-output-string call-with-output-string)
+
+    (when (eqv? (module-ref mod 'format) orig-simple-format)
+      (module-set! mod 'format simple-format))))

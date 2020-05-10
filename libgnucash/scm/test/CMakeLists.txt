@@ -6,6 +6,7 @@ set(GUILE_DEPENDS
   scm-gnc-module
   scm-app-utils
   scm-scm scm-engine
+  scm-srfi64-extras
   )
 
 if (HAVE_SRFI64)
@@ -18,7 +19,7 @@ if (HAVE_SRFI64)
 
   gnc_add_scheme_tests("${scm_test_SCHEME}")
 
-endif (HAVE_SRFI64)
+endif()
 
 set_dist_list(test_scm_DIST
   CMakeLists.txt

@@ -163,6 +163,8 @@ qof_book_init (QofBook *book)
 
 static const std::string str_KVP_OPTION_PATH(KVP_OPTION_PATH);
 static const std::string str_OPTION_SECTION_ACCOUNTS(OPTION_SECTION_ACCOUNTS);
+static const std::string str_OPTION_SECTION_BUDGETING(OPTION_SECTION_BUDGETING);
+static const std::string str_OPTION_NAME_DEFAULT_BUDGET(OPTION_NAME_DEFAULT_BUDGET);
 static const std::string str_OPTION_NAME_TRADING_ACCOUNTS(OPTION_NAME_TRADING_ACCOUNTS);
 static const std::string str_OPTION_NAME_AUTO_READONLY_DAYS(OPTION_NAME_AUTO_READONLY_DAYS);
 static const std::string str_OPTION_NAME_NUM_FIELD_SOURCE(OPTION_NAME_NUM_FIELD_SOURCE);
@@ -206,7 +208,7 @@ qof_book_get_property (GObject* object,
         break;
     case PROP_OPT_DEFAULT_BUDGET:
         qof_instance_get_path_kvp (QOF_INSTANCE (book), value, {str_KVP_OPTION_PATH,
-                str_OPTION_SECTION_ACCOUNTS, OPTION_NAME_DEFAULT_BUDGET});
+                str_OPTION_SECTION_BUDGETING, str_OPTION_NAME_DEFAULT_BUDGET});
         break;
     case PROP_OPT_FY_END:
         qof_instance_get_path_kvp (QOF_INSTANCE (book), value, {"fy_end"});
@@ -261,7 +263,7 @@ qof_book_set_property (GObject      *object,
         break;
     case PROP_OPT_DEFAULT_BUDGET:
         qof_instance_set_path_kvp (QOF_INSTANCE (book), value, {str_KVP_OPTION_PATH,
-                str_OPTION_SECTION_ACCOUNTS, OPTION_NAME_DEFAULT_BUDGET});
+                str_OPTION_SECTION_BUDGETING, OPTION_NAME_DEFAULT_BUDGET});
         break;
     case PROP_OPT_FY_END:
         qof_instance_set_path_kvp (QOF_INSTANCE (book), value, {"fy_end"});
@@ -1169,6 +1171,18 @@ qof_book_set_string_option(QofBook* book, const char* opt_name, const char* opt_
         delete frame->set_path(opt_path, nullptr);
     qof_instance_set_dirty (QOF_INSTANCE (book));
     qof_book_commit_edit(book);
+}
+
+const GncGUID*
+qof_book_get_guid_option(QofBook* book, GSList* path)
+{
+    g_return_val_if_fail(book != nullptr, nullptr);
+    g_return_val_if_fail(path != nullptr, nullptr);
+
+    auto table_value = qof_book_get_option(book, path);
+    if (!table_value)
+        return nullptr;
+    return table_value->get<GncGUID*>();
 }
 
 void

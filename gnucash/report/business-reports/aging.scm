@@ -29,6 +29,9 @@
 (use-modules (gnucash utilities))
 (use-modules (gnucash gnc-module))
 (use-modules (gnucash gettext))
+(eval-when (compile load eval expand)
+  (load-extension "libgncmod-gnome-utils" "scm_init_sw_gnome_utils_module"))
+(use-modules (sw_gnome_utils))
 
 (gnc:module-load "gnucash/report/report-system" 0)
 
@@ -214,15 +217,18 @@
 	       (if (not (gnc-commodity-equiv
 			 this-currency
 			 (company-get-currency company-info)))
-		   (let ((error-str
-			  (string-append "IGNORING TRANSACTION!\n" "Invoice Owner: " (gncOwnerGetName owner)
-					 "\nTransaction GUID:" (gncTransGetGuid transaction)
-					 "\nTransaction Currency" (gnc-commodity-get-mnemonic this-currency)
-					 "\nClient Currency" (gnc-ommodity-get-mnemonic(company-get-currency company-info)))))
-		     (gnc-error-dialog '() error-str)
-		     (gnc:error error-str)
-		     (cons #f (format
-			       (_ "Transactions relating to '~a' contain \
+                   (let ((error-str
+                          (string-append "IGNORING TRANSACTION!\n" "Invoice Owner: " (gnc:strify owner)
+                                         "\nTransaction:" (gnc:strify transaction)
+                                         "\nSplits are:\n"
+                                         (string-join
+                                          (map gnc:strify (xaccTransGetSplitList transaction))
+                                          "\n")
+                                         "\nTransaction Currency:" (gnc:strify this-currency)
+                                         "\nClient Currency:" (gnc:strify (company-get-currency company-info)))))
+                     (gnc-error-dialog '() error-str)
+                     (gnc:error error-str)
+                     (cons #f (format #f (_ "Transactions relating to '~a' contain \
 more than one currency. This report is not designed to cope with this possibility.")  (gncOwnerGetName owner))))
 		   (begin
 		     (gnc:debug "it's an old company")
@@ -376,8 +382,8 @@ more than one currency. This report is not designed to cope with this possibilit
        (N_ "Sort order.")
        'increasing
        (list
-	(vector 'increasing (N_ "Increasing") (N_ "0 -> $999,999.99, A->Z."))
-	(vector 'decreasing (N_ "Decreasing") (N_ "$999,999.99 -> $0, Z->A.")))))
+	(vector 'increasing (N_ "Increasing") (N_ "0 .. 999,999.99, A .. Z."))
+	(vector 'decreasing (N_ "Decreasing") (N_ "999,999.99 .. 0, Z .. A.")))))
 
     (add-option
      (gnc:make-simple-boolean-option
@@ -716,7 +722,7 @@ copying this report to a spreadsheet for use in a mail merge.")
     ;; set default title
     (gnc:html-document-set-title! document report-title)
     ;; maybe redefine better...
-    (if (not (null? account))
+    (if (and account (not (null? account)))
         (begin
           (gnc:html-document-set-title!
            document (string-append report-title ": " (xaccAccountGetName account)))
@@ -731,7 +737,7 @@ copying this report to a spreadsheet for use in a mail merge.")
 
     (gnc:html-table-set-col-headers! table heading-list)
 				     
-    (if (not (null? account))
+    (if (and account (not (null? account)))
 	(begin
 	  (setup-query query account report-date)
 	  ;; get the appropriate splits

@@ -40,7 +40,8 @@
   ;; It also dumps the render into /tmp/XX-YY.html where XX is the
   ;; test prefix and YY is the test title.
 
-  (let* ((template (gnc:find-report-template uuid))
+  (let* ((template (or (gnc:find-report-template uuid)
+                       (error "report not found:" uuid)))
          (constructor (record-constructor <report>))
          (report (constructor uuid "bar" options #t #t #f #f ""))
          (renderer (gnc:report-template-renderer template))
@@ -52,22 +53,22 @@
     (if test-title
         (gnc:html-document-set-title! document test-title))
     (let ((render (gnc:html-document-render document)))
-      (with-output-to-file (format #f "/tmp/~a-~a.html"
+      (call-with-output-file (format #f "/tmp/~a-~a.html"
                                    (string-map sanitize-char prefix)
                                    (string-map sanitize-char test-title))
-        (lambda ()
-          (display render)))
+        (lambda (p)
+          (display render p)))
       render)))
 
 (define (strip-string s1 s2)
-  (let loop ((str s1))
+  (let loop ((str s1)
+             (res '()))
     (let ((startpos (string-contains str (format #f "<~a" s2)))
           (endpos (string-contains str (format #f "</~a>" s2))))
       (if (and startpos endpos)
-          (loop (string-append
-                 (string-take str startpos)
-                 (string-drop str (+ endpos (string-length s2) 3))))
-          str))))
+          (loop (substring str (+ endpos (string-length s2) 3))
+                (cons (substring str 0 startpos) res))
+          (string-concatenate-reverse (cons str res))))))
 
 (export gnc:options->sxml)
 (define* (gnc:options->sxml uuid options prefix test-title #:key strip-tag)

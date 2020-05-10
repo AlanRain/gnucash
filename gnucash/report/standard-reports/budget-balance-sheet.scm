@@ -48,7 +48,6 @@
 (define optname-report-form (N_ "Single column Balance Sheet"))
 (define opthelp-report-form
   (N_ "Print liability/equity section in the same column under the assets section as opposed to a second column right of the assets section."))
-;; FIXME this needs an indent option
 
 (define optname-accounts (N_ "Accounts"))
 (define opthelp-accounts
@@ -250,25 +249,18 @@
 ;; requested, export it to a file
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (budget-balance-sheet-renderer report-obj choice filename)
+(define (budget-balance-sheet-renderer report-obj)
   (define (get-option pagename optname)
     (gnc:option-value
      (gnc:lookup-option 
       (gnc:report-options report-obj) pagename optname)))
 
   (define (get-budget-account-budget-balance budget account)
-    (gnc:budget-account-get-net budget account #f #f))
-
-  (define (get-budget-account-budget-balance-negated budget account)
-    (gnc:commodity-collector-get-negated
-      (get-budget-account-budget-balance budget account)))
+    (let ((bal (gnc:budget-account-get-net budget account #f #f)))
+      (if (gnc-reverse-budget-balance account #t) (gnc:collector- bal) bal)))
 
   (define (get-budget-account-initial-balance budget account)
     (gnc:budget-account-get-initial-balance budget account))
-
-  (define (get-budget-account-initial-balance-negated budget account)
-    (gnc:commodity-collector-get-negated
-      (get-budget-account-initial-balance budget account)))
 
   (define (get-budget-accountlist-budget-balance budget accountlist)
     (gnc:budget-accountlist-get-net budget accountlist #f #f))
@@ -282,25 +274,11 @@
     (gnc:commodity-collector-get-negated
       (gnc:get-assoc-account-balances-total account-balances)))
 
-  (define
-    (sum-prefetched-account-balances-for-account
-      initial-balances budget-balances account)
-    (let*
-      (
-        (initial-balance
-          (gnc:select-assoc-account-balance initial-balances account))
-        (budget-balance
-          (gnc:select-assoc-account-balance budget-balances account))
-        (total-balance
-          (if (or (not initial-balance) (not budget-balance))
-            #f
-            (gnc:make-commodity-collector))))
-      (if
-        total-balance
-        (begin
-          (total-balance 'merge initial-balance #f)
-          (total-balance 'merge budget-balance #f)))
-      total-balance))
+  (define (sum-prefetched-account-balances-for-account
+           initial-balances budget-balances account)
+    (let ((initial (gnc:select-assoc-account-balance initial-balances account))
+          (budget (gnc:select-assoc-account-balance budget-balances account)))
+      (and initial budget (gnc:collector+ initial budget))))
 
   (gnc:report-starting reportname)
   
@@ -330,10 +308,9 @@
          (parent-balance-mode (get-option gnc:pagename-display
                                            optname-parent-balance-mode))
          (parent-total-mode
-	  (car
-	   (assoc-ref '((t #t) (f #f) (canonically-tabbed canonically-tabbed))
-		      (get-option gnc:pagename-display
-				  optname-parent-total-mode))))
+	  (assq-ref '((t . #t) (f . #f) (canonically-tabbed . canonically-tabbed))
+		    (get-option gnc:pagename-display
+				optname-parent-total-mode)))
          (show-zb-accts? (get-option gnc:pagename-display
 				     optname-show-zb-accts))
          (omit-zb-bals? (get-option gnc:pagename-display
@@ -356,8 +333,6 @@
 				     optname-account-links))
          (use-rules? (get-option gnc:pagename-display
 				    optname-use-rules))
-	 (indent 0)
-	 (tabbing #f)
 	 
          ;; decompose the account list
          (split-up-accounts (gnc:decompose-accountlist accounts))
@@ -382,44 +357,24 @@
 	  (gnc:case-exchange-fn price-source report-commodity date-t64))
 	 )
     
-    ;; Wrapper to call gnc:html-table-add-labeled-amount-line!
-    ;; with the proper arguments.
     (define (add-subtotal-line table pos-label neg-label signed-balance)
-      (define allow-same-column-totals #t)
-      (let* ((neg? (and signed-balance
-			neg-label
-			(gnc-numeric-negative-p
+      (let* ((neg? (and signed-balance neg-label
+			(negative?
 			 (gnc:gnc-monetary-amount
 			  (gnc:sum-collector-commodity
 			   signed-balance report-commodity exchange-fn)))))
 	     (label (if neg? (or neg-label pos-label) pos-label))
-	     (balance (if neg?
-			  (let ((bal (gnc:make-commodity-collector)))
-			    (bal 'minusmerge signed-balance #f)
-			    bal)
-			  signed-balance))
-	     )
+	     (balance (if neg? (gnc:collector- signed-balance) signed-balance)))
 	(gnc:html-table-add-labeled-amount-line!
-	 table
-	 (+ indent (* tree-depth 2)
-	    (if (equal? tabbing 'canonically-tabbed) 1 0))
-	 "primary-subheading"
-	 (and (not allow-same-column-totals) balance use-rules?)
-	 label indent 1 "total-label-cell"
+         table (* tree-depth 2) "primary-subheading" #f label 0 1 "total-label-cell"
 	 (gnc:sum-collector-commodity balance report-commodity exchange-fn)
-	 (+ indent (* tree-depth 2) (- 0 1)
-	    (if (equal? tabbing 'canonically-tabbed) 1 0))
-	 1 "total-number-cell")
-	)
-      )
-    
+         (1- (* tree-depth 2)) 1 "total-number-cell")))
+
     ;; Wrapper around gnc:html-table-append-ruler! since we call it so
     ;; often.
     (define (add-rule table)
       (gnc:html-table-append-ruler!
-       table
-       (+ (* 2 tree-depth)
-	  (if (equal? tabbing 'canonically-tabbed) 1 0))))
+       table (* 2 tree-depth)))
 
     (cond
       ((null? accounts)
@@ -574,49 +529,32 @@
             (gnc:commodity-collector-get-negated liability-repayments))
 
 	  ;; Total liabilities.
-	  (set! liability-balance (gnc:make-commodity-collector))
-          (liability-balance 'merge existing-liabilities #f)
-          (liability-balance 'merge new-liabilities #f)
-
+	  (set! liability-balance
+            (gnc:collector+ existing-liabilities new-liabilities))
 
 	  (gnc:report-percent-done 12)
 
-
           ;; Total existing retained earnings.
           ;; existing retained earnings = initial income - initial expenses
-          (set! existing-retained-earnings (gnc:make-commodity-collector))
-          ;; Income is negative; negate to add.
-          (existing-retained-earnings 'minusmerge
-            (gnc:budget-accountlist-get-initial-balance budget income-accounts)
-            #f)
-          ;; Expenses are positive; negate to subtract.
-          (existing-retained-earnings 'minusmerge
-            (gnc:budget-accountlist-get-initial-balance budget expense-accounts)
-            #f)
-
+          (set! existing-retained-earnings
+            (gnc:collector-
+             (gnc:collector+
+              (gnc:budget-accountlist-get-initial-balance budget income-accounts)
+              (gnc:budget-accountlist-get-initial-balance budget expense-accounts))))
 
 	  (gnc:report-percent-done 14)
 
-
           ;; Total new retained earnings.
-          (set! new-retained-earnings (gnc:make-commodity-collector))
-          ;; Budgeted income is positive; add.
-          (new-retained-earnings 'merge
-            (get-budget-accountlist-budget-balance budget income-accounts)
-            #f)
-          ;; Budgeted expenses are positive; negate to subtract.
-          (new-retained-earnings 'minusmerge
-            (get-budget-accountlist-budget-balance budget expense-accounts)
-            #f)
+          (set! new-retained-earnings
+            (gnc:collector-
+             (get-budget-accountlist-budget-balance budget income-accounts)
+             (get-budget-accountlist-budget-balance budget expense-accounts)))
 
           ;; Total retained earnings.
-          (set! retained-earnings (gnc:make-commodity-collector))
-          (retained-earnings 'merge existing-retained-earnings #f)
-          (retained-earnings 'merge new-retained-earnings #f)
-
+          (set! retained-earnings
+            (gnc:collector+ existing-retained-earnings new-retained-earnings))
 
 	  (gnc:report-percent-done 16)
-
 
           ;; Total existing assets.
           (set! existing-assets
@@ -631,77 +569,56 @@
           ;; Total unallocated assets.
           ;; unallocated-assets =
           ;;  new-retained-earnings - allocated-assets - liability-repayments
-          (set! unallocated-assets (gnc:make-commodity-collector))
-          (unallocated-assets 'merge new-retained-earnings #f)
-          (unallocated-assets 'minusmerge allocated-assets #f)
-          (unallocated-assets 'minusmerge liability-repayments #f)
+          (set! unallocated-assets
+            (gnc:collector- new-retained-earnings
+                            allocated-assets
+                            liability-repayments))
 
           ;; Total assets.
-	  (set! asset-balance (gnc:make-commodity-collector))
-          (asset-balance 'merge existing-assets #f)
-          (asset-balance 'merge allocated-assets #f)
-          (asset-balance 'merge unallocated-assets #f)
-
+	  (set! asset-balance
+            (gnc:collector+ existing-assets allocated-assets unallocated-assets))
 
 	  (gnc:report-percent-done 18)
 
-
           ;; Calculate unrealized gains.
-          (set! unrealized-gain (gnc:make-commodity-collector))
-          (let*
-            (
-              (get-total-value-fn
-                (lambda (account)
-                  (gnc:account-get-comm-value-at-date account date-t64 #f)))
-              (asset-basis
-                (gnc:accounts-get-comm-total-assets
-                  asset-accounts get-total-value-fn))
-              (liability-basis
-                (gnc:commodity-collector-get-negated
+          (let* ((get-total-value-fn
+                  (lambda (account)
+                    (gnc:account-get-comm-value-at-date account date-t64 #f)))
+                 (asset-basis
                   (gnc:accounts-get-comm-total-assets
-                    liability-accounts get-total-value-fn)))
-            )
+                   asset-accounts get-total-value-fn))
+                 (liability-basis
+                  (gnc:collector-
+                   (gnc:accounts-get-comm-total-assets
+                    liability-accounts get-total-value-fn))))
 
-            ;; Calculate unrealized gains from assets.
-            (unrealized-gain 'merge existing-assets #f)
-            (unrealized-gain 'minusmerge asset-basis #f)
-
-            ;; Combine with unrealized gains from liabilities
-            (unrealized-gain 'minusmerge existing-liabilities #f)
-            (unrealized-gain 'merge liability-basis #f))
-
+            (set! unrealized-gain
+              (gnc:collector-
+               (gnc:collector- existing-assets asset-basis)
+               (gnc:collector- existing-liabilities liability-basis))))
 
 	  (gnc:report-percent-done 22)
 
-
           ;; Total existing equity; negative.
           (set! existing-equity
-            (get-assoc-account-balances-total-negated
-              equity-account-initial-balances))
-          ;; Include existing retained earnings.
-          (existing-equity 'merge existing-retained-earnings #f)
-          ;; Include unrealized gains.
-          (existing-equity 'merge unrealized-gain #f)
-
+            (gnc:collector+
+             (get-assoc-account-balances-total-negated equity-account-initial-balances)
+             existing-retained-earnings
+             unrealized-gain))
 
           ;; Total new equity; positive.
           (set! new-equity
-            (gnc:get-assoc-account-balances-total
-              equity-account-budget-balances))
-          ;; Include new retained earnings.
-          (new-equity 'merge new-retained-earnings #f)
-
+            (gnc:collector+
+             (gnc:get-assoc-account-balances-total equity-account-budget-balances)
+             new-retained-earnings))
 
           ;; Total equity.
-	  (set! equity-balance (gnc:make-commodity-collector))
-	  (equity-balance 'merge existing-equity #f)
-	  (equity-balance 'merge new-equity #f)
+	  (set! equity-balance
+            (gnc:collector+ existing-equity new-equity))
 
           ;; Total liability + equity.
-	  (set! liability-plus-equity (gnc:make-commodity-collector))
-	  (liability-plus-equity 'merge liability-balance #f)
-	  (liability-plus-equity 'merge equity-balance #f)
-	  
+	  (set! liability-plus-equity
+            (gnc:collector+ liability-balance equity-balance))
 
 	  (gnc:report-percent-done 30)
 	  
@@ -737,20 +654,13 @@
 		 (list 'rule-mode use-rules?)
 		  )
 		)
-	  
-	  ;; Workaround to force gtkhtml into displaying wide
-	  ;; enough columns.
-	  (let ((space
-		 (make-list tree-depth "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;")
-		 ))
-	    (gnc:html-table-append-row! left-table space)
-	    (if (not report-form?)
-		(gnc:html-table-append-row! right-table space))
-	    )
-	  
-	  (gnc:report-percent-done 80)
+
+          (let ((space (make-list tree-depth (gnc:make-html-table-cell/min-width 60))))
+            (gnc:html-table-append-row! left-table space)
+            (unless report-form?
+              (gnc:html-table-append-row! right-table space)))
+
+          (gnc:report-percent-done 80)
 	  (if label-assets? (add-subtotal-line left-table (_ "Assets") #f #f))
 	  (set! asset-table
             (gnc:make-html-acct-table/env/accts
@@ -867,7 +777,7 @@
 	  
           (add-subtotal-line
             right-table
-            (_ "Total Liabilities & Equity")
+            (gnc:html-string-sanitize (_ "Total Liabilities & Equity"))
             #f
             liability-plus-equity)
 	  
@@ -900,16 +810,7 @@
                doc ;;(gnc:html-markup-p)
                (gnc:html-make-exchangerates 
                 report-commodity exchange-fn accounts)))
-	  (gnc:report-percent-done 100)
-	  
-	  ;; if sending the report to a file, do so now
-	  ;; however, this still doesn't seem to get around the
-	  ;; colspan bug... cf. gnc:colspans-are-working-right
-	  (if filename
-	      (let* ((port (open-output-file filename)))
-                (gnc:display-report-list-item
-                 (list doc) port " budget-balance-sheet.scm ")
-                (close-output-port port)))))))
+	  (gnc:report-percent-done 100)))))
     
     (gnc:report-finished)
     
@@ -921,8 +822,4 @@
  'report-guid "ecc35ea9dbfa4e20ba389fc85d59cb69"
  'menu-path (list gnc:menuname-budget)
  'options-generator budget-balance-sheet-options-generator
- 'renderer (lambda (report-obj)
-	     (budget-balance-sheet-renderer report-obj #f #f))
- 'export-types #f
- 'export-thunk (lambda (report-obj choice filename)
-		 (budget-balance-sheet-renderer report-obj #f filename)))
+ 'renderer budget-balance-sheet-renderer)

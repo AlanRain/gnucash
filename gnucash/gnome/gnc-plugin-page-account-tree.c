@@ -101,7 +101,7 @@ typedef struct GncPluginPageAccountTreePrivate
 } GncPluginPageAccountTreePrivate;
 
 #define GNC_PLUGIN_PAGE_ACCOUNT_TREE_GET_PRIVATE(o)  \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_PLUGIN_PAGE_ACCOUNT_TREE, GncPluginPageAccountTreePrivate))
+   ((GncPluginPageAccountTreePrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_PLUGIN_PAGE_ACCOUNT_TREE))
 
 static GObjectClass *parent_class = NULL;
 
@@ -114,6 +114,7 @@ static void gnc_plugin_page_account_tree_init (GncPluginPageAccountTree *plugin_
 static void gnc_plugin_page_account_tree_finalize (GObject *object);
 static void gnc_plugin_page_account_tree_selected (GObject *object, gpointer user_data);
 
+static gboolean gnc_plugin_page_account_tree_focus_widget (GncPluginPage *plugin_page);
 static GtkWidget *gnc_plugin_page_account_tree_create_widget (GncPluginPage *plugin_page);
 static void gnc_plugin_page_account_tree_destroy_widget (GncPluginPage *plugin_page);
 static void gnc_plugin_page_account_tree_save_page (GncPluginPage *plugin_page, GKeyFile *file, const gchar *group);
@@ -146,6 +147,7 @@ static void gnc_plugin_page_account_tree_cmd_delete_account (GtkAction *action, 
 static void gnc_plugin_page_account_tree_cmd_renumber_accounts (GtkAction *action, GncPluginPageAccountTree *page);
 static void gnc_plugin_page_account_tree_cmd_view_filter_by (GtkAction *action, GncPluginPageAccountTree *plugin_page);
 static void gnc_plugin_page_account_tree_cmd_reconcile (GtkAction *action, GncPluginPageAccountTree *page);
+static void gnc_plugin_page_account_tree_cmd_refresh (GtkAction *action, GncPluginPageAccountTree *page);
 static void gnc_plugin_page_account_tree_cmd_autoclear (GtkAction *action, GncPluginPageAccountTree *page);
 static void gnc_plugin_page_account_tree_cmd_transfer (GtkAction *action, GncPluginPageAccountTree *page);
 static void gnc_plugin_page_account_tree_cmd_stock_split (GtkAction *action, GncPluginPageAccountTree *page);
@@ -252,6 +254,11 @@ static GtkActionEntry gnc_plugin_page_account_tree_actions [] =
     {
         "ViewFilterByAction", NULL, N_("_Filter By..."), NULL, NULL,
         G_CALLBACK (gnc_plugin_page_account_tree_cmd_view_filter_by)
+    },
+    {
+        "ViewRefreshAction", "view-refresh", N_("_Refresh"), "<primary>r",
+        N_("Refresh this window"),
+        G_CALLBACK (gnc_plugin_page_account_tree_cmd_refresh)
     },
 
     /* Actions menu */
@@ -399,6 +406,7 @@ gnc_plugin_page_account_tree_class_init (GncPluginPageAccountTreeClass *klass)
     gnc_plugin_class->destroy_widget  = gnc_plugin_page_account_tree_destroy_widget;
     gnc_plugin_class->save_page       = gnc_plugin_page_account_tree_save_page;
     gnc_plugin_class->recreate_page   = gnc_plugin_page_account_tree_recreate_page;
+    gnc_plugin_class->focus_page_function = gnc_plugin_page_account_tree_focus_widget;
 
     plugin_page_signals[ACCOUNT_SELECTED] =
         g_signal_new ("account_selected",
@@ -567,12 +575,16 @@ gnc_plugin_page_account_tree_get_current_account (GncPluginPageAccountTree *page
     return account;
 }
 
-gboolean
-gnc_plugin_page_account_tree_focus (GncPluginPageAccountTree *page)
+/**
+ * Whenever the current page is changed, if an account page is
+ * the current page, set focus on the tree view.
+ */
+static gboolean
+gnc_plugin_page_account_tree_focus_widget (GncPluginPage *account_plugin_page)
 {
-    if (GNC_IS_PLUGIN_PAGE_ACCOUNT_TREE(page))
+    if (GNC_IS_PLUGIN_PAGE_ACCOUNT_TREE(account_plugin_page))
     {
-        GncPluginPageAccountTreePrivate *priv = GNC_PLUGIN_PAGE_ACCOUNT_TREE_GET_PRIVATE(page);
+        GncPluginPageAccountTreePrivate *priv = GNC_PLUGIN_PAGE_ACCOUNT_TREE_GET_PRIVATE(account_plugin_page);
         GtkTreeView *view = GTK_TREE_VIEW(priv->tree_view);
 
         if (!gtk_widget_is_focus (GTK_WIDGET(view)))
@@ -596,6 +608,8 @@ gnc_plugin_page_account_refresh_cb (GHashTable *changes, gpointer user_data)
         return;
 
     priv = GNC_PLUGIN_PAGE_ACCOUNT_TREE_GET_PRIVATE(page);
+
+    gnc_tree_view_account_clear_model_cache (GNC_TREE_VIEW_ACCOUNT(priv->tree_view));
     gtk_widget_queue_draw(priv->widget);
 }
 
@@ -730,6 +744,10 @@ gnc_plugin_page_account_tree_create_widget (GncPluginPage *plugin_page)
                            gnc_plugin_page_account_tree_summarybar_position_changed,
                            page);
 
+    g_signal_connect (G_OBJECT(plugin_page), "inserted",
+                      G_CALLBACK(gnc_plugin_page_inserted_cb),
+                      NULL);
+
     // Read account filter state information from account section
     gnc_tree_view_account_restore_filter (GNC_TREE_VIEW_ACCOUNT(priv->tree_view), &priv->fd,
        gnc_state_get_current(), gnc_tree_view_get_state_section (GNC_TREE_VIEW(priv->tree_view)));
@@ -764,8 +782,11 @@ gnc_plugin_page_account_tree_destroy_widget (GncPluginPage *plugin_page)
     // Destroy the filter override hash table
     g_hash_table_destroy(priv->fd.filter_override);
 
+    // Remove the page_changed signal callback
+    gnc_plugin_page_disconnect_page_changed (GNC_PLUGIN_PAGE(plugin_page));
+
     // Remove the page focus idle function if present
-    g_idle_remove_by_data (GNC_PLUGIN_PAGE_ACCOUNT_TREE (plugin_page));
+    g_idle_remove_by_data (plugin_page);
 
     if (priv->widget)
     {
@@ -1402,7 +1423,7 @@ gnc_plugin_page_account_tree_cmd_delete_account (GtkAction *action, GncPluginPag
         g_object_set_data(G_OBJECT(dialog), DELETE_DIALOG_FILTER, filter);
         g_object_set_data(G_OBJECT(dialog), DELETE_DIALOG_ACCOUNT, account);
 
-        // Add the account selectors and enable sections as appropiate
+        // Add the account selectors and enable sections as appropriate
         // setup transactions selector
         trans_mas = gppat_setup_account_selector (builder, dialog, "trans_mas_hbox", DELETE_DIALOG_TRANS_MAS);
 
@@ -1654,6 +1675,20 @@ gnc_plugin_page_account_tree_cmd_renumber_accounts (GtkAction *action,
         return;
 
     gnc_account_renumber_create_dialog(window, account);
+}
+
+static void
+gnc_plugin_page_account_tree_cmd_refresh (GtkAction *action,
+        GncPluginPageAccountTree *page)
+{
+    GncPluginPageAccountTreePrivate *priv;
+
+    g_return_if_fail(GNC_IS_PLUGIN_PAGE_ACCOUNT_TREE(page));
+
+    priv = GNC_PLUGIN_PAGE_ACCOUNT_TREE_GET_PRIVATE(page);
+
+    gnc_tree_view_account_clear_model_cache (GNC_TREE_VIEW_ACCOUNT(priv->tree_view));
+    gtk_widget_queue_draw (priv->widget);
 }
 
 /*********************/

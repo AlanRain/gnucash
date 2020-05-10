@@ -70,9 +70,15 @@ gnc_set_label_color(GtkWidget *label, gnc_numeric value)
     deficit = gnc_numeric_negative_p (value);
 
     if (deficit)
-        gnc_widget_set_style_context (GTK_WIDGET(label), "negative-numbers");
+    {
+        gnc_widget_style_context_remove_class (GTK_WIDGET(label), "default-color");
+        gnc_widget_style_context_add_class (GTK_WIDGET(label), "negative-numbers");
+    }
     else
-        gnc_widget_set_style_context (GTK_WIDGET(label), "default-color");
+    {
+        gnc_widget_style_context_remove_class (GTK_WIDGET(label), "negative-numbers");
+        gnc_widget_style_context_add_class (GTK_WIDGET(label), "default-color");
+    }
 }
 
 
@@ -143,7 +149,7 @@ gnc_restore_window_size(const char *group, GtkWindow *window, GtkWindow *parent)
             if (wpos[1] - monitor_size.y + wsize[1] > monitor_size.y + monitor_size.height)
                 wpos[1] = monitor_size.y + monitor_size.height - wsize[1];
 
-            /* make sure the cordinates have not left the monitor */
+            /* make sure the coordinates have not left the monitor */
             if (wpos[0] < monitor_size.x)
                 wpos[0] = monitor_size.x;
 
@@ -286,7 +292,7 @@ gnc_window_adjust_for_screen(GtkWindow * window)
     if (wpos[1] - monitor_size.y + height > monitor_size.y + monitor_size.height)
         wpos[1] = monitor_size.y + monitor_size.height - height;
 
-    /* make sure the cordinates have not left the monitor */
+    /* make sure the coordinates have not left the monitor */
     if (wpos[0] < monitor_size.x)
         wpos[0] = monitor_size.x;
 
@@ -364,8 +370,30 @@ gnc_tree_view_get_grid_lines_pref (void)
 void
 gnc_widget_set_style_context (GtkWidget *widget, const char *gnc_class)
 {
+    gnc_widget_style_context_add_class (widget, gnc_class);
+}
+
+void
+gnc_widget_style_context_add_class (GtkWidget *widget, const char *gnc_class)
+{
     GtkStyleContext *context = gtk_widget_get_style_context (widget);
     gtk_style_context_add_class (context, gnc_class);
+}
+
+/********************************************************************\
+ * Remove a style context class from a Widget                       *
+ *                                                                  *
+ * Args:    widget - widget to remove style class from              *
+ *       gnc_class - character string for css class name            *
+ * Returns:  nothing                                                *
+\********************************************************************/
+void
+gnc_widget_style_context_remove_class (GtkWidget *widget, const char *gnc_class)
+{
+    GtkStyleContext *context = gtk_widget_get_style_context (widget);
+
+    if (gtk_style_context_has_class (context, gnc_class))
+        gtk_style_context_remove_class (context, gnc_class);
 }
 
 /********************************************************************\
@@ -866,3 +894,14 @@ gnc_cost_policy_select_new (void)
     return cost_policy_widget;
 }
 
+gchar*
+get_negative_color (void)
+{
+    GdkRGBA color;
+    GtkWidget *label = gtk_label_new ("Color");
+    GtkStyleContext *context = gtk_widget_get_style_context (GTK_WIDGET(label));
+    gtk_style_context_add_class (context, "negative-numbers");
+    gtk_style_context_get_color (context, GTK_STATE_FLAG_NORMAL, &color);
+
+    return gdk_rgba_to_string (&color);
+}

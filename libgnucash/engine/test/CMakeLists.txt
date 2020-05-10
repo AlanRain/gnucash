@@ -19,7 +19,7 @@ endmacro()
 
 add_executable(test-link EXCLUDE_FROM_ALL test-link.c)
 target_link_libraries(test-link gnc-core-utils)
-add_test(NAME test-link COMMAND test-link)
+add_test(NAME test-link COMMAND test-link CONFIGURATIONS Debug;Release)
 add_dependencies(check test-link)
 
 #################################################
@@ -99,6 +99,7 @@ set(gtest_qof_LIBS
   ${GOBJECT_LDFLAGS}
   ${GMODULE_LDFLAGS}
   ${GTHREAD_LDFLAGS}
+  ${ICU4C_I18N_LDFLAGS}
   ${Boost_LIBRARIES}
   ${GTEST_LIB})
 
@@ -118,34 +119,30 @@ if (WIN32)
     ${MODULEPATH}/qof-win32.cpp
     ../../../borrowed/libc/strptime.c
   )
-endif (WIN32)
+endif()
 
 set(test_gnc_guid_SOURCES
   ${MODULEPATH}/guid.cpp
-  test-gnc-guid.cpp
-  ${GTEST_SRC})
+  test-gnc-guid.cpp)
 gnc_add_test(test-gnc-guid "${test_gnc_guid_SOURCES}"
   gtest_engine_INCLUDES gtest_old_engine_LIBS)
 
 set(test_kvp_value_SOURCES
   ${MODULEPATH}/kvp-value.cpp
   test-kvp-value.cpp
-  test-kvp-frame.cpp
-  ${GTEST_SRC})
+  test-kvp-frame.cpp)
 gnc_add_test(test-kvp-value "${test_kvp_value_SOURCES}"
   gtest_engine_INCLUDES gtest_old_engine_LIBS)
 
 set(test_qofsession_SOURCES
   ${MODULEPATH}/qofsession.cpp
-  test-qofsession.cpp
-  ${GTEST_SRC})
+  test-qofsession.cpp)
 gnc_add_test(test-qofsession "${test_qofsession_SOURCES}"
   gtest_engine_INCLUDES gtest_old_engine_LIBS)
 
 set(test_gnc_int128_SOURCES
   ${MODULEPATH}/gnc-int128.cpp
-  gtest-gnc-int128.cpp
-  ${GTEST_SRC})
+  gtest-gnc-int128.cpp)
 gnc_add_test(test-gnc-int128 "${test_gnc_int128_SOURCES}"
   gtest_engine_INCLUDES gtest_qof_LIBS)
 
@@ -159,8 +156,7 @@ set(test_gnc_rational_SOURCES
   ${MODULEPATH}/qoflog.cpp
   ${CMAKE_SOURCE_DIR}/libgnucash/core-utils/gnc-locale-utils.cpp
   ${gtest_engine_win32_SOURCES}
-  gtest-gnc-rational.cpp
-  ${GTEST_SRC})
+  gtest-gnc-rational.cpp)
 
 gnc_add_test(test-gnc-rational "${test_gnc_rational_SOURCES}"
   gtest_engine_INCLUDES gtest_qof_LIBS)
@@ -175,15 +171,13 @@ set(test_gnc_numeric_SOURCES
   ${MODULEPATH}/qoflog.cpp
   ${CMAKE_SOURCE_DIR}/libgnucash/core-utils/gnc-locale-utils.cpp
   ${gtest_engine_win32_SOURCES}
-  gtest-gnc-numeric.cpp
-  ${GTEST_SRC})
+  gtest-gnc-numeric.cpp)
 gnc_add_test(test-gnc-numeric "${test_gnc_numeric_SOURCES}"
   gtest_engine_INCLUDES gtest_qof_LIBS)
 
 set(test_gnc_timezone_SOURCES
   ${MODULEPATH}/gnc-timezone.cpp
-  gtest-gnc-timezone.cpp
-  ${GTEST_SRC})
+  gtest-gnc-timezone.cpp)
 gnc_add_test(test-gnc-timezone "${test_gnc_timezone_SOURCES}"
   gtest_engine_INCLUDES gtest_old_engine_LIBS)
 
@@ -194,20 +188,17 @@ set(test_gnc_datetime_SOURCES
   ${MODULEPATH}/qoflog.cpp
   ${CMAKE_SOURCE_DIR}/libgnucash/core-utils/gnc-locale-utils.cpp
   ${gtest_engine_win32_SOURCES}
-  gtest-gnc-datetime.cpp
-  ${GTEST_SRC})
+  gtest-gnc-datetime.cpp)
 gnc_add_test(test-gnc-datetime "${test_gnc_datetime_SOURCES}"
   gtest_engine_INCLUDES gtest_qof_LIBS)
 
 set(test_import_map_SOURCES
-  gtest-import-map.cpp
-  ${GTEST_SRC})
+  gtest-import-map.cpp)
 gnc_add_test(test-import-map "${test_import_map_SOURCES}"
   gtest_engine_INCLUDES gtest_old_engine_LIBS)
 
 set(test_qofquerycore_SOURCES
-gtest-qofquerycore.cpp
-${GTEST_SRC})
+gtest-qofquerycore.cpp)
 gnc_add_test(test-qofquerycore "${test_qofquerycore_SOURCES}"
   gtest_engine_INCLUDES gtest_old_engine_LIBS)
 
@@ -247,7 +238,13 @@ if (HAVE_SRFI64)
     srfi64-extras.scm
     )
 
-endif (HAVE_SRFI64)
+  set (scm_tests_with_srfi64_SOURCES
+    test-business-core.scm
+    )
+
+  gnc_add_scheme_tests("${scm_tests_with_srfi64_SOURCES}")
+  add_dependencies(check scm-srfi64-extras)
+endif()
 
 gnc_add_scheme_targets(scm-test-engine
   "${engine_test_SCHEME}"
@@ -318,6 +315,7 @@ set(test_engine_SCHEME_DIST
         test-extras.scm
         test-scm-query-import.scm
         test-split.scm
+        test-business-core.scm
 )
 
 set(test_engine_EXTRA_DIST

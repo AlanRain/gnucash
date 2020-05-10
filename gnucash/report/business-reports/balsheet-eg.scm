@@ -37,8 +37,8 @@
 (use-modules (gnucash gettext))
 (use-modules (gnucash report eguile-gnc))
 (use-modules (gnucash report eguile-utilities))
+(use-modules (gnucash report eguile-html-utilities))
 
-(use-modules (ice-9 regex))  ; for regular expressions
 (use-modules (ice-9 local-eval))  ; for the-environment
 (use-modules (srfi srfi-13)) ; for extra string functions
 
@@ -46,38 +46,6 @@
 (gnc:module-load "gnucash/html" 0)
 
 (define debugging? #f)
-
-;;; these could go into a separate module..........
-;;;
-;; Useful routines to use in the template
-(define (escape-html s1)
-  ;; convert string s1 to escape HTML special characters < > and &
-  ;; i.e. convert them to &lt; &gt; and &amp; respectively.
-  ;; Maybe there's a way to do this in one go... (but order is important)
-  (set! s1 (regexp-substitute/global #f "&" s1 'pre "&amp;" 'post))
-  (set! s1 (regexp-substitute/global #f "<" s1 'pre "&lt;" 'post))
-  (regexp-substitute/global #f ">" s1 'pre "&gt;" 'post))
-
-(define (nl->br str)
-  ;; replace newlines with <br>
-  (regexp-substitute/global #f "\n" str 'pre "<br />" 'post))
-
-(define (nbsp str)
-  ;; replace spaces with &nbsp; (non-breaking spaces)
-  ;; (yes, I know <nobr> is non-standard, but webkit splits e.g. "-£40.00" between
-  ;; the '-' and the '£' without it.)
-  (string-append "<nobr>" (regexp-substitute/global #f " " str 'pre "&nbsp;" 'post) "</nobr>"))
-
-(define (dump x) (escape-html (object->string x)))
-(define (ddump x) (display (dump x)))
-
-(define (string-repeat s n)
-  ;; return a string made of n copies of string s
-  ;; (there's probably a better way)
-  (let ((s2 ""))
-    (do ((i 1 (1+ i))) ((> i n))
-      (set! s2 (string-append s2 s)))
-    s2))
 
 (define (debug . args)
   (if debugging?
@@ -91,28 +59,6 @@
   (display "<tr valign=\"center\"><td colspan=\"")
   (display cols)
   (display "\">&nbsp;</td></tr>\n"))
-
-(define (empty-cells n)
-  ;; Display n empty table cells
-  (display (string-repeat "<td class=\"empty\"></td>" n)))
-
-(define (indent-cells n)
-  ;; Display n empty table cells with width attribute for indenting
-  ;; (the &nbsp;s are just there in case CSS isn't working)
-  (display (string-repeat "<td min-width=\"32\" class=\"indent\">&nbsp;&nbsp;</td>" n)))
-
-;; 'Safe' versions of cdr and cadr that don't crash
-;; if the list is empty  (is there a better way?)
-(define (safe-cdr l)
-  (if (null? l)
-    '()
-    (cdr l)))
-(define (safe-cadr l)
-  (if (null? l)
-    '()
-    (if (null? (cdr l))
-      '()
-      (cadr l))))
 
 (define (add-to-cc cc com num neg?)
   ; add a numeric and commodity to a commodity-collector,
@@ -179,15 +125,6 @@
                                         sublist)
                                      accrec-printer))
 (define newaccrec-full (record-constructor accrectype))                ; requires all the fields
-(define newaccrec-empty (record-constructor accrectype '()))        ; all fields default to #f
-(define newaccrec (record-constructor accrectype '(account         ; most-likely-to-be-needed fields
-                                                    code
-                                                    placeholder?
-                                                    namelink
-                                                    commodity
-                                                    balance-num
-                                                    depth
-                                                    treedepth)))
 (define (newaccrec-clean)
   ;; Create a new accrec with 'clean' empty values, e.g. strings are "", not #f
   (newaccrec-full #f         ; account
@@ -380,7 +317,7 @@
          (opt-report-commodity (get-option commodities-page optname-report-commodity))
          (opt-price-source     (get-option commodities-page optname-price-source))
          (opt-show-foreign?    (get-option commodities-page optname-show-foreign))
-         (opt-report-title     (get-option general-page     optname-report-title))
+         (opt-report-title     (get-option general-page     gnc:optname-reportname))
          (opt-date             (gnc:time64-end-day-time
                                  (gnc:date-option-absolute-time
                                    (get-option general-page optname-date))))
@@ -619,6 +556,12 @@
           (negstyle (nbsp mny-string)))
         (nbsp mny-string)))
 
+    (define (monetary-rounded mon)
+      (let ((c (gnc:gnc-monetary-commodity mon))
+            (a (gnc:gnc-monetary-amount mon)))
+        (gnc:make-gnc-monetary
+         c (gnc-numeric-convert a (gnc-commodity-get-fraction c) GNC-RND-ROUND))))
+
     (define (format-monetary mny)
       ;; Format the given gnc:monetary value according to opt-neg-format
       ;; If mny's currency isn't the same as that of the report,
@@ -632,10 +575,10 @@
         (if (not (gnc-commodity-equiv comm opt-report-commodity))
           (begin
             (if opt-show-foreign?
-              (set! answer (string-append (foreignstyle (neg-format (gnc:monetary->string mny) neg?)) "&nbsp;")))
+              (set! answer (string-append (foreignstyle (neg-format (gnc:monetary->string (monetary-rounded mny)) neg?)) "&nbsp;")))
             (set! mny (exchange-fn mny opt-report-commodity))))
         ; main currency - converted if necessary
-        (set! answer (string-append answer (neg-format (gnc:monetary->string mny) neg?)))
+        (set! answer (string-append answer (neg-format (gnc:monetary->string (monetary-rounded mny)) neg?)))
         answer))
 
     (define (format-comm-coll cc)
@@ -654,7 +597,7 @@
     (define (fmtmoney2 mny)
       ;; format a monetary amount in the given currency/commodity
       ;; !! this takes a gnc-monetary
-      (nbsp (gnc:monetary->string mny)))
+      (nbsp (gnc:monetary->string (monetary-rounded mny))))
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

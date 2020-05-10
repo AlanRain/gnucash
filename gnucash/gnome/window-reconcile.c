@@ -114,6 +114,8 @@ typedef struct _startRecnWindowData
     GtkWidget     *startRecnWindow; /* the startRecnWindow dialog              */
     GtkWidget     *xfer_button;     /* the dialog's interest transfer button   */
     GtkWidget     *date_value;      /* the dialog's ending date field          */
+    GtkWidget     *future_icon;
+    GtkWidget     *future_text;
     GNCAmountEdit *end_value;       /* the dialog's ending balance amount edit */
     gnc_numeric    original_value;  /* the dialog's original ending balance    */
     gboolean       user_set_value;  /* the user changed the ending value       */
@@ -250,6 +252,16 @@ recn_get_account (RecnWindow *recnData)
 }
 
 
+static void
+gnc_add_colorized_amount (gpointer obj, gnc_numeric amt,
+                          GNCPrintAmountInfo print_info, gboolean reverse)
+{
+    if (!obj) return;
+    if (reverse) amt = gnc_numeric_neg (amt);
+    gnc_set_label_color (GTK_WIDGET (obj), amt);
+    gtk_label_set_text (GTK_LABEL (obj), xaccPrintAmount (amt, print_info));
+}
+
 /********************************************************************\
  * recnRecalculateBalance                                           *
  *   refreshes the balances in the reconcile window                 *
@@ -262,7 +274,6 @@ static gnc_numeric
 recnRecalculateBalance (RecnWindow *recnData)
 {
     Account *account;
-    const char *amount;
     gnc_numeric debit;
     gnc_numeric credit;
     gnc_numeric starting;
@@ -278,73 +289,33 @@ recnRecalculateBalance (RecnWindow *recnData)
         return gnc_numeric_zero ();
 
     reverse_balance = gnc_reverse_balance(account);
-
-    /* update the starting balance */
     include_children = xaccAccountGetReconcileChildrenStatus(account);
     starting = gnc_ui_account_get_reconciled_balance(account, include_children);
     print_info = gnc_account_print_info (account, TRUE);
 
-    /*
-     * Do not reverse the balance here.  It messes up the math in the
-     * reconciliation window.  Also, the balance should show up as a
-     * positive number in the reconciliation window to match the positive
-     * number that shows in the register window.
-     */
-
-    amount = xaccPrintAmount(starting, print_info);
-    gnc_set_label_color(recnData->starting, starting);
-    gtk_label_set_text(GTK_LABEL(recnData->starting), amount);
-    if (reverse_balance)
-        starting = gnc_numeric_neg (starting);
-
-    /* update the statement date */
-    amount = qof_print_date(recnData->statement_date);
-    gtk_label_set_text(GTK_LABEL(recnData->recn_date), amount);
-
-    /* update the ending balance */
     ending = recnData->new_ending;
-    if (reverse_balance)
-        ending = gnc_numeric_neg (ending);
-    amount = xaccPrintAmount(ending, print_info);
-    gnc_set_label_color(recnData->ending, ending);
-    gtk_label_set_text(GTK_LABEL(recnData->ending), amount);
-    if (reverse_balance)
-        ending = gnc_numeric_neg (ending);
-
     debit = gnc_reconcile_view_reconciled_balance
             (GNC_RECONCILE_VIEW(recnData->debit));
-
     credit = gnc_reconcile_view_reconciled_balance
              (GNC_RECONCILE_VIEW(recnData->credit));
 
-    /* Update the total debit and credit fields */
-    amount = xaccPrintAmount(debit, print_info);
-    gtk_label_set_text(GTK_LABEL(recnData->total_debit), amount);
-
-    amount = xaccPrintAmount(credit, print_info);
-
-    gtk_label_set_text(GTK_LABEL(recnData->total_credit), amount);
-
-    /* update the reconciled balance */
-    reconciled = gnc_numeric_add_fixed (starting,
-                                        gnc_numeric_sub_fixed (debit, credit));
+    reconciled = gnc_numeric_sub_fixed (debit, credit);
     if (reverse_balance)
-        reconciled = gnc_numeric_neg (reconciled);
-    amount = xaccPrintAmount(reconciled, print_info);
-    gnc_set_label_color(recnData->reconciled, reconciled);
-    gtk_label_set_text(GTK_LABEL(recnData->reconciled), amount);
-    if (reverse_balance)
-        reconciled = gnc_numeric_neg (reconciled);
+        reconciled = gnc_numeric_sub_fixed (reconciled, starting);
+    else
+        reconciled = gnc_numeric_add_fixed (reconciled, starting);
 
-    /* update the difference */
     diff = gnc_numeric_sub_fixed (ending, reconciled);
-    if (reverse_balance)
-        diff = gnc_numeric_neg (diff);
-    amount = xaccPrintAmount(diff, print_info);
-    gnc_set_label_color(recnData->difference, diff);
-    gtk_label_set_text(GTK_LABEL(recnData->difference), amount);
-    if (reverse_balance)
-        diff = gnc_numeric_neg (diff);
+
+    gtk_label_set_text(GTK_LABEL(recnData->recn_date),
+                       qof_print_date(recnData->statement_date));
+
+    gnc_add_colorized_amount (recnData->starting, starting, print_info, FALSE);
+    gnc_add_colorized_amount (recnData->ending, ending, print_info, reverse_balance);
+    gnc_add_colorized_amount (recnData->total_debit, debit, print_info, FALSE);
+    gnc_add_colorized_amount (recnData->total_credit, credit, print_info, FALSE);
+    gnc_add_colorized_amount (recnData->reconciled, reconciled, print_info, reverse_balance);
+    gnc_add_colorized_amount (recnData->difference, diff, print_info, reverse_balance);
 
     action = gtk_action_group_get_action (recnData->action_group,
                                           "RecnFinishAction");
@@ -383,9 +354,55 @@ gnc_start_recn_date_changed (GtkWidget *widget, startRecnWindowData *data)
     gnc_numeric new_balance;
     time64 new_date;
 
+    gboolean show_warning = FALSE;
+    gint days_after_today;
+    static const time64 secs_per_day = 86400;
+    static const time64 secs_per_hour = 3600;
+
+    new_date = gnc_date_edit_get_date_end (gde);
+
+    /* Add secs_per_hour to the difference to compensate for the short
+     * day when transitioning from standard to daylight time.
+     */
+    days_after_today = (gnc_time64_get_day_end (new_date) -
+                        gnc_time64_get_today_end () +
+                        secs_per_hour) / secs_per_day;
+
+    if (days_after_today > 0)
+    {
+        gchar *str = g_strdup_printf
+            /* Translators: %d is the number of days in the future */
+            (ngettext ("Statement Date is %d day after today.",
+                       "Statement Date is %d days after today.",
+                       days_after_today),
+             days_after_today);
+
+        gchar *tip_start = g_strdup_printf
+            /* Translators: %d is the number of days in the future */
+            (ngettext ("The statement date you have chosen is %d day in the future.",
+                       "The statement date you have chosen is %d days in the future.",
+                       days_after_today),
+             days_after_today);
+
+        gchar *tip_end = g_strdup (_("This may cause issues for future reconciliation \
+actions on this account. Please double-check this is the date you intended."));
+        gchar *tip = g_strdup_printf ("%s %s", tip_start, tip_end);
+
+        show_warning = TRUE;
+
+        gtk_label_set_text (GTK_LABEL(data->future_text), str);
+        gtk_widget_set_tooltip_text (GTK_WIDGET(data->future_text), tip);
+        g_free (str);
+        g_free (tip_end);
+        g_free (tip_start);
+        g_free (tip);
+    }
+    gtk_widget_set_visible (GTK_WIDGET(data->future_icon), show_warning);
+    gtk_widget_set_visible (GTK_WIDGET(data->future_text), show_warning);
+
     if (data->user_set_value)
         return;
-    new_date = gnc_date_edit_get_date_end (gde);
+
     /* get the balance for the account as of the new date */
     new_balance = gnc_ui_account_get_balance_as_of_date (data->account, new_date,
                   data->include_children);
@@ -771,6 +788,10 @@ startRecnWindow(GtkWidget *parent, Account *account,
         data.end_value = GNC_AMOUNT_EDIT(end_value);
         data.original_value = *new_ending;
         data.user_set_value = FALSE;
+
+        data.future_icon = GTK_WIDGET(gtk_builder_get_object (builder, "future_icon"));
+        data.future_text = GTK_WIDGET(gtk_builder_get_object (builder, "future_text"));
+
         box = GTK_WIDGET(gtk_builder_get_object (builder, "ending_value_box"));
         gtk_box_pack_start(GTK_BOX(box), end_value, TRUE, TRUE, 0);
         label = GTK_WIDGET(gtk_builder_get_object (builder, "end_label"));
@@ -820,6 +841,9 @@ startRecnWindow(GtkWidget *parent, Account *account,
         }
 
         gtk_widget_show_all(dialog);
+
+        gtk_widget_hide (data.future_text);
+        gtk_widget_hide (data.future_icon);
 
         gtk_widget_grab_focus(gnc_amount_edit_gtk_entry
                               (GNC_AMOUNT_EDIT (end_value)));
@@ -1195,7 +1219,7 @@ gnc_reconcile_window_create_view_box(Account *account,
     gtk_box_set_homogeneous (GTK_BOX (hbox), FALSE);
     gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
 
-    label = gtk_label_new(_("Total:"));
+    label = gtk_label_new(_("Total"));
     gnc_label_set_alignment(label, 1.0, 0.5);
     gtk_box_pack_start(GTK_BOX(hbox), label, TRUE, TRUE, 0);
 
@@ -1765,7 +1789,7 @@ recnWindowWithBalance (GtkWidget *parent, Account *account, gnc_numeric new_endi
 
         action_group = gtk_action_group_new ("ReconcileWindowActions");
         recnData->action_group = action_group;
-        gtk_action_group_set_translation_domain(action_group, GETTEXT_PACKAGE);
+        gtk_action_group_set_translation_domain(action_group, PROJECT_NAME);
         gtk_action_group_add_actions (action_group, recnWindow_actions,
                                       recnWindow_n_actions, recnData);
         action =
@@ -1809,6 +1833,43 @@ recnWindowWithBalance (GtkWidget *parent, Account *account, gnc_numeric new_endi
                       G_CALLBACK(recn_delete_cb), recnData);
     g_signal_connect (recnData->window, "key_press_event",
                       G_CALLBACK(recn_key_press_cb), recnData);
+
+
+    /* if account has a reconciled split where reconciled_date is
+       later than statement_date, emit a warning into statusbar */
+    {
+        GtkStatusbar *bar = GTK_STATUSBAR (statusbar);
+        guint context = gtk_statusbar_get_context_id (bar, "future_dates");
+        GtkWidget *box = gtk_statusbar_get_message_area (bar);
+        GtkWidget *image = gtk_image_new_from_icon_name
+            ("dialog-warning", GTK_ICON_SIZE_SMALL_TOOLBAR);
+
+        for (GList *n = xaccAccountGetSplitList (account); n; n = n->next)
+        {
+            Split* split = n->data;
+            time64 recn_date = xaccSplitGetDateReconciled (split);
+            if ((xaccSplitGetReconcile (split) != YREC) ||
+                (recn_date <= statement_date))
+                continue;
+
+            PWARN ("split posting_date=%s, recn_date=%s",
+                   qof_print_date (xaccTransGetDate (xaccSplitGetParent (split))),
+                   qof_print_date (recn_date));
+
+            gtk_statusbar_push (bar, context, _("WARNING! Account contains \
+splits whose reconcile date is after statement date. Reconciliation may be \
+difficult."));
+
+            gtk_widget_set_tooltip_text (GTK_WIDGET (bar), _("This account \
+has splits whose Reconciled Date is after this reconciliation statement date. \
+These splits may make reconciliation difficult. If this is the case, you may \
+use Find Transactions to find them, unreconcile, and re-reconcile."));
+
+            gtk_box_pack_start (GTK_BOX(box), image, FALSE, FALSE, 0);
+            gtk_box_reorder_child (GTK_BOX(box), image, 0);
+            break;
+        }
+    }
 
     /* The main area */
     {
@@ -1886,7 +1947,7 @@ recnWindowWithBalance (GtkWidget *parent, Account *account, gnc_numeric new_endi
             gtk_box_pack_start(GTK_BOX(totals_hbox), value_vbox, TRUE, TRUE, 0);
 
             /* statement date title/value */
-            title = gtk_label_new(_("Statement Date:"));
+            title = gtk_label_new(_("Statement Date"));
             gnc_label_set_alignment(title, 1.0, 0.5);
             gtk_box_pack_start(GTK_BOX(title_vbox), title, FALSE, FALSE, 0);
 
@@ -1896,7 +1957,7 @@ recnWindowWithBalance (GtkWidget *parent, Account *account, gnc_numeric new_endi
             gtk_box_pack_start(GTK_BOX(value_vbox), value, FALSE, FALSE, 0);
 
             /* starting balance title/value */
-            title = gtk_label_new(_("Starting Balance:"));
+            title = gtk_label_new(_("Starting Balance"));
             gnc_label_set_alignment(title, 1.0, 0.5);
             gtk_box_pack_start(GTK_BOX(title_vbox), title, FALSE, FALSE, 3);
 
@@ -1906,7 +1967,7 @@ recnWindowWithBalance (GtkWidget *parent, Account *account, gnc_numeric new_endi
             gtk_box_pack_start(GTK_BOX(value_vbox), value, FALSE, FALSE, 3);
 
             /* ending balance title/value */
-            title = gtk_label_new(_("Ending Balance:"));
+            title = gtk_label_new(_("Ending Balance"));
             gnc_label_set_alignment(title, 1.0, 0.5);
             gtk_box_pack_start(GTK_BOX(title_vbox), title, FALSE, FALSE, 0);
 
@@ -1916,7 +1977,7 @@ recnWindowWithBalance (GtkWidget *parent, Account *account, gnc_numeric new_endi
             gtk_box_pack_start(GTK_BOX(value_vbox), value, FALSE, FALSE, 0);
 
             /* reconciled balance title/value */
-            title = gtk_label_new(_("Reconciled Balance:"));
+            title = gtk_label_new(_("Reconciled Balance"));
             gnc_label_set_alignment(title, 1.0, 0.5);
             gtk_box_pack_start(GTK_BOX(title_vbox), title, FALSE, FALSE, 0);
 
@@ -1926,7 +1987,7 @@ recnWindowWithBalance (GtkWidget *parent, Account *account, gnc_numeric new_endi
             gtk_box_pack_start(GTK_BOX(value_vbox), value, FALSE, FALSE, 0);
 
             /* difference title/value */
-            title = gtk_label_new(_("Difference:"));
+            title = gtk_label_new(_("Difference"));
             gnc_label_set_alignment(title, 1.0, 0.5);
             gtk_box_pack_start(GTK_BOX(title_vbox), title, FALSE, FALSE, 0);
 

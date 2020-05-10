@@ -103,7 +103,7 @@ gboolean gnucash_sheet_draw_cb (GtkWidget *widget, cairo_t *cr,
 
 /** Implementation *****************************************************/
 
-G_INLINE_FUNC gboolean
+static inline gboolean
 gnucash_sheet_virt_cell_out_of_bounds (GnucashSheet *sheet,
                                        VirtualCellLocation vcell_loc);
 gboolean
@@ -407,8 +407,10 @@ gnucash_sheet_activate_cursor_cell (GnucashSheet *sheet,
         sheet->direct_update_cell =
             gnucash_sheet_check_direct_update_cell (sheet, virt_loc);
     }
-
-    gtk_widget_grab_focus (GTK_WIDGET(sheet));
+    // when a gui refresh is called, we end up here so only grab the focus
+    // if the sheet is showing on the current plugin_page
+    if (sheet->sheet_has_focus)
+        gtk_widget_grab_focus (GTK_WIDGET(sheet));
 }
 
 
@@ -564,7 +566,8 @@ gnucash_sheet_show_row (GnucashSheet *sheet, gint virt_row)
     height = alloc.height;
 
     block = gnucash_sheet_get_block (sheet, vcell_loc);
-
+    if (!block)
+        return;
     y = block->origin_y;
     block_height = block->style->dimensions->height;
 
@@ -644,6 +647,8 @@ gnucash_sheet_show_range (GnucashSheet *sheet,
 
     start_block = gnucash_sheet_get_block (sheet, start_loc);
     end_block = gnucash_sheet_get_block (sheet, end_loc);
+    if (!(start_block && end_block))
+        return;
 
     y = start_block->origin_y;
     block_height = (end_block->origin_y +
@@ -752,6 +757,12 @@ gnucash_sheet_is_read_only (GnucashSheet *sheet)
     g_return_val_if_fail (sheet != NULL, TRUE);
     g_return_val_if_fail (GNUCASH_IS_SHEET(sheet), TRUE);
     return gnc_table_model_read_only (sheet->table->model);
+}
+
+void
+gnucash_sheet_set_has_focus (GnucashSheet *sheet, gboolean has_focus)
+{
+    sheet->sheet_has_focus = has_focus;
 }
 
 static void
@@ -1709,7 +1720,7 @@ gnucash_sheet_key_press_event_internal (GtkWidget *widget, GdkEventKey *event)
     new_virt_loc = cur_virt_loc;
 
     /* Don't process any keystrokes where a modifier key (Alt,
-     * Meta, etc.) is being held down.  This should't include
+     * Meta, etc.) is being held down.  This shouldn't include
          * MOD2, aka NUM LOCK. */
     if (event->state & modifiers & (GDK_MODIFIER_INTENT_DEFAULT_MOD_MASK))
         pass_on = TRUE;
@@ -1855,7 +1866,12 @@ gnucash_sheet_key_press_event_internal (GtkWidget *widget, GdkEventKey *event)
 
     /* If that would leave the register, abort */
     if (abort_move)
+    {
+        // Make sure the sheet is the focus
+        if (!gtk_widget_has_focus(GTK_WIDGET (sheet)))
+            gtk_widget_grab_focus (GTK_WIDGET (sheet));
         return TRUE;
+    }
 
     /* Clear the saved selection for the new cell. */
     sheet->end_sel = sheet->start_sel;
@@ -2223,7 +2239,7 @@ gnucash_sheet_block_set_from_table (GnucashSheet *sheet,
     block = gnucash_sheet_get_block (sheet, vcell_loc);
     style = gnucash_sheet_get_style_from_table (sheet, vcell_loc);
 
-    if (block == NULL)
+    if (!block)
         return FALSE;
 
     table = sheet->table;
@@ -2260,6 +2276,7 @@ gnucash_sheet_col_max_width (GnucashSheet *sheet, gint virt_col, gint cell_col)
     SheetBlockStyle *style;
     PangoLayout *layout = gtk_widget_create_pango_layout (GTK_WIDGET (sheet), "");
     GncItemEdit *item_edit = GNC_ITEM_EDIT(sheet->item_editor);
+    const gchar *type_name;
 
     g_return_val_if_fail (virt_col >= 0, 0);
     g_return_val_if_fail (virt_col < sheet->num_virt_cols, 0);
@@ -2270,18 +2287,26 @@ gnucash_sheet_col_max_width (GnucashSheet *sheet, gint virt_col, gint cell_col)
         VirtualCellLocation vcell_loc = { virt_row, virt_col };
 
         block = gnucash_sheet_get_block (sheet, vcell_loc);
+        if (!block)
+            continue;
+
         style = block->style;
 
         if (!style)
             continue;
 
         if (cell_col < style->ncols)
+        {
             for (cell_row = 0; cell_row < style->nrows; cell_row++)
             {
                 VirtualLocation virt_loc;
                 const char *text;
 
-                virt_loc.vcell_loc = vcell_loc;
+                if (virt_row == 0)
+                    virt_loc.vcell_loc = sheet->table->current_cursor_loc.vcell_loc;
+                else
+                    virt_loc.vcell_loc = vcell_loc;
+
                 virt_loc.phys_row_offset = cell_row;
                 virt_loc.phys_col_offset = cell_col;
 
@@ -2302,13 +2327,22 @@ gnucash_sheet_col_max_width (GnucashSheet *sheet, gint virt_col, gint cell_col)
                 width += (gnc_item_edit_get_margin (item_edit, left_right) +
                           gnc_item_edit_get_padding_border (item_edit, left_right));
 
+                // get the cell type so we can add the button width to the
+                // text width if required.
+                type_name = gnc_table_get_cell_type_name (sheet->table, virt_loc);
+                if ((g_strcmp0 (type_name, DATE_CELL_TYPE_NAME) == 0)
+                    || (g_strcmp0 (type_name, COMBO_CELL_TYPE_NAME) == 0))
+                {
+                    width += gnc_item_edit_get_button_width (item_edit) + 2; // add 2 for the button margin
+                }
                 max = MAX (max, width);
             }
+        }
     }
 
     g_object_unref (layout);
 
-    return max + 1; // add 1 for the border
+    return max;
 }
 
 void
@@ -2404,6 +2438,9 @@ gnucash_sheet_recompute_block_offsets (GnucashSheet *sheet)
             VirtualCellLocation vcell_loc = { i, j };
 
             block = gnucash_sheet_get_block (sheet, vcell_loc);
+
+            if (!block)
+                continue;
 
             block->origin_x = width;
             block->origin_y = height;
@@ -2671,7 +2708,6 @@ gnucash_sheet_tooltip (GtkWidget  *widget, gint x, gint y,
                gpointer    user_data)
 {
     GnucashSheet *sheet = GNUCASH_SHEET (widget);
-    GnucashCursor *cursor = sheet->cursor;
     Table *table = sheet->table;
     VirtualLocation virt_loc;
     gchar *tooltip_text;
@@ -2711,7 +2747,7 @@ gnucash_sheet_tooltip (GtkWidget  *widget, gint x, gint y,
     by = block->origin_y;
 
     // get the cell location and dimensions
-    gnucash_sheet_style_get_cell_pixel_rel_coords (cursor->style,
+    gnucash_sheet_style_get_cell_pixel_rel_coords (block->style,
             virt_loc.phys_row_offset, virt_loc.phys_col_offset,
             &cx, &cy, &cw, &ch);
 
@@ -2735,6 +2771,9 @@ gnucash_sheet_new (Table *table)
     g_return_val_if_fail (table != NULL, NULL);
 
     sheet = gnucash_sheet_create (table);
+
+    /* on create, the sheet can grab the focus */
+    sheet->sheet_has_focus = TRUE;
 
     /* The cursor */
     sheet->cursor = gnucash_cursor_new (sheet);

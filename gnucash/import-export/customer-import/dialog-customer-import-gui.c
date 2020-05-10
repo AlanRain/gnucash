@@ -124,25 +124,25 @@ gnc_plugin_customer_import_showGUI(GtkWindow *parent)
   column = gtk_tree_view_column_new_with_attributes (description, renderer, "text", column_id, NULL); \
   gtk_tree_view_column_set_resizable (column, TRUE); \
   gtk_tree_view_append_column (GTK_TREE_VIEW (gui->tree_view), column);
-    CREATE_COLUMN ("id", CI_ID);
-    CREATE_COLUMN ("company", CI_COMPANY);
-    CREATE_COLUMN ("name", CI_NAME);
-    CREATE_COLUMN ("addr1", CI_ADDR1);
-    CREATE_COLUMN ("addr2", CI_ADDR2);
-    CREATE_COLUMN ("addr3", CI_ADDR3);
-    CREATE_COLUMN ("addr4", CI_ADDR4);
-    CREATE_COLUMN ("phone", CI_PHONE);
-    CREATE_COLUMN ("fax", CI_FAX);
-    CREATE_COLUMN ("email", CI_EMAIL);
-    CREATE_COLUMN ("notes", CI_NOTES);
-    CREATE_COLUMN ("shipname", CI_SHIPNAME);
-    CREATE_COLUMN ("shipaddr1", CI_SHIPADDR1);
-    CREATE_COLUMN ("shipaddr2", CI_SHIPADDR2);
-    CREATE_COLUMN ("shipaddr3", CI_SHIPADDR3);
-    CREATE_COLUMN ("shipaddr4", CI_SHIPADDR4);
-    CREATE_COLUMN ("shipphone", CI_SHIPPHONE);
-    CREATE_COLUMN ("shipfax", CI_SHIPFAX);
-    CREATE_COLUMN ("shipemail", CI_SHIPEMAIL);
+    CREATE_COLUMN (_("ID"), CI_ID);
+    CREATE_COLUMN (_("Company"), CI_COMPANY);
+    CREATE_COLUMN (_("Name"), CI_NAME);
+    CREATE_COLUMN (_("Address 1"), CI_ADDR1);
+    CREATE_COLUMN (_("Address 2"), CI_ADDR2);
+    CREATE_COLUMN (_("Address 3"), CI_ADDR3);
+    CREATE_COLUMN (_("Address 4"), CI_ADDR4);
+    CREATE_COLUMN (_("Phone"), CI_PHONE);
+    CREATE_COLUMN (_("Fax"), CI_FAX);
+    CREATE_COLUMN (_("Email"), CI_EMAIL);
+    CREATE_COLUMN (_("Notes"), CI_NOTES);
+    CREATE_COLUMN (_("Shipping Name"), CI_SHIPNAME);
+    CREATE_COLUMN (_("Shipping Address 1"), CI_SHIPADDR1);
+    CREATE_COLUMN (_("Shipping Address 2"), CI_SHIPADDR2);
+    CREATE_COLUMN (_("Shipping Address 3"), CI_SHIPADDR3);
+    CREATE_COLUMN (_("Shipping Address 4"), CI_SHIPADDR4);
+    CREATE_COLUMN (_("Shipping Phone"), CI_SHIPPHONE);
+    CREATE_COLUMN (_("Shipping Fax"), CI_SHIPFAX);
+    CREATE_COLUMN (_("Shipping Email"), CI_SHIPEMAIL);
 
     gui->component_id = gnc_register_gui_component ("dialog-customer-import-gui",
                         NULL,
@@ -387,15 +387,15 @@ gnc_input_dialog (GtkWidget *parent, const gchar *title, const gchar *msg, const
 
     // add a label
     label = gtk_label_new (msg);
-    gtk_container_add (GTK_CONTAINER (content_area), label);
+    gtk_box_pack_start(GTK_BOX(content_area), label, FALSE, FALSE, 0);
 
     // add a textview
     view = gtk_text_view_new ();
     gtk_text_view_set_wrap_mode (GTK_TEXT_VIEW (view), GTK_WRAP_WORD_CHAR);
     buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (view));
     gtk_text_buffer_set_text (buffer, default_input, -1);
-    gtk_container_add (GTK_CONTAINER (content_area), view);
-
+    gtk_box_pack_start(GTK_BOX(content_area), view, TRUE, TRUE, 0);
+    
     // run the dialog
     gtk_widget_show_all (dialog);
     result = gtk_dialog_run (GTK_DIALOG (dialog));
@@ -443,11 +443,10 @@ gnc_info2_dialog (GtkWidget *parent, const gchar *title, const gchar *msg)
 
     // add a scroll area
     scrolledwindow = gtk_scrolled_window_new (NULL, NULL);
-    gtk_container_add (GTK_CONTAINER (content_area), scrolledwindow);
+    gtk_box_pack_start(GTK_BOX(content_area), scrolledwindow, TRUE, TRUE, 0);
 
     // add a textview
     view = gtk_text_view_new ();
-//    gtk_text_view_set_wrap_mode (GTK_TEXT_VIEW (view), GTK_WRAP_WORD_CHAR);
     gtk_text_view_set_editable (GTK_TEXT_VIEW (view), FALSE);
     buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (view));
     gtk_text_buffer_set_text (buffer, msg, -1);

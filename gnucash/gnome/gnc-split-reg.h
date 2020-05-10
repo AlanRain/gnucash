@@ -248,6 +248,7 @@ void gnc_split_reg_jump_to_split_amount(GNCSplitReg *gsr, Split *split);
  * Set the focus of the register to the sheet
  **/
 void gnc_split_reg_focus_on_sheet (GNCSplitReg *gsr);
+void gnc_split_reg_set_sheet_focus (GNCSplitReg *gsr, gboolean has_focus);
 
 /*
  * Create a transaction entry with given amount and date. One account is
@@ -263,6 +264,7 @@ void gsr_default_associate_handler (GNCSplitReg *gsr, gboolean uri_is_file);
 void gsr_default_execassociated_handler( GNCSplitReg *gsr, gpointer data );
 void gnc_split_reg_enter( GNCSplitReg *gsr, gboolean next_transaction );
 void gsr_default_delete_handler( GNCSplitReg *gsr, gpointer data );
+void gsr_default_cut_txn_handler( GNCSplitReg *gsr, gpointer data );
 void gsr_default_reinit_handler( GNCSplitReg *gsr, gpointer data );
 void gsr_default_expand_handler( GNCSplitReg *gsr, gpointer data );
 void gsr_default_schedule_handler( GNCSplitReg *gsr, gpointer data );

@@ -42,7 +42,7 @@ from datetime import date
 
 # This script takes a gnucash url
 # and creates a new file/db at a second url that has the same
-# account tree and an equivilent opening balance on all the simple balance
+# account tree and an equivalent opening balance on all the simple balance
 # sheet accounts (not for income and expense accounts)
 #
 # This is done a per currency basis, one opening balance account for each
@@ -51,11 +51,11 @@ from datetime import date
 # mutual, and trading, you'll have to put the opening balance in yourself
 #
 # Invocation examples:
-# gnucash-env python new_book_with_opening_balances.py \
+# python3 new_book_with_opening_balances.py \
 #   '/home/mark/test.gnucash'
 #   'sqlite3:///home/mark/new_test.gnucash'
 #
-# gnucash-env python new_book_with_opening_balances.py \
+# python3 new_book_with_opening_balances.py \
 #   '/home/mark/test.gnucash' \
 #   'xml:///crypthome/mark/parit-financial-system/new_test.gnucash'
 #
@@ -122,7 +122,7 @@ ACCOUNT_TYPES_TO_OPEN = ACCOUNT_TYPES_TO_OPEN.difference( set((
             )) )
 
 # this script isn't capable of properly setting up the transactions for
-# ACCT_TYPE_TRADING, you'll have to create opening balances for them mannually;
+# ACCT_TYPE_TRADING, you'll have to create opening balances for them manually;
 # so, they are not included in the set of accounts used for opening balances
 ACCOUNT_TYPES_TO_OPEN.remove(ACCT_TYPE_TRADING)
 
@@ -293,8 +293,8 @@ def main():
         print('not enough parameters')
         print('usage: new_book_with_opening_balances.py {source_book_url} {destination_book_url}')
         print('examples:')
-        print("gnucash-env python new_book_with_opening_balances.py '/home/username/test.gnucash' 'sqlite3:///home/username/new_test.gnucash'")
-        print("gnucash-env python new_book_with_opening_balances.py '/home/username/test.gnucash' 'xml:///crypthome/username/finances/new_test.gnucash'")
+        print("python3 new_book_with_opening_balances.py '/home/username/test.gnucash' 'sqlite3:///home/username/new_test.gnucash'")
+        print("python3 new_book_with_opening_balances.py '/home/username/test.gnucash' 'xml:///crypthome/username/finances/new_test.gnucash'")
         return
 
     #have everything in a try block to unable us to release our hold on stuff to the extent possible

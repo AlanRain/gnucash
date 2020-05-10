@@ -106,7 +106,7 @@
 (export gnc:assign-colors)
 (export gnc:html-table-append-ruler!)
 (export gnc:html-table-append-ruler/markup!)
-(export gnc:html-acct-table-cell)
+(export gnc:html-acct-table-cell)       ;deprecated
 (export gnc:html-acct-table-row-helper! )
 (export gnc:html-acct-table-comm-row-helper!)
 (export gnc:html-build-acct-table)
@@ -122,7 +122,6 @@
 (export gnc:html-make-options-link)
 (export gnc:html-js-include)
 (export gnc:html-css-include)
-(export gnc:html-string-sanitize)
 
 ;; report.scm
 (export gnc:menuname-reports)
@@ -131,6 +130,7 @@
 (export gnc:menuname-budget)
 (export gnc:menuname-taxes)
 (export gnc:menuname-utility)
+(export gnc:menuname-experimental)
 (export gnc:menuname-custom)
 (export gnc:menuname-business-reports)
 (export gnc:pagename-general)
@@ -430,17 +430,17 @@
 (export gnc:html-markup-style-info-set-tag!)
 (export gnc:html-markup-style-info-attributes)
 (export gnc:html-markup-style-info-set-attributes!)
-(export gnc:html-markup-style-info-font-face)
-(export gnc:html-markup-style-info-set-font-face-internal!)
-(export gnc:html-markup-style-info-set-font-face!)
-(export gnc:html-markup-style-info-font-size)
-(export gnc:html-markup-style-info-set-font-size-internal!)
-(export gnc:html-markup-style-info-set-font-size!)
-(export gnc:html-markup-style-info-font-color)
-(export gnc:html-markup-style-info-set-font-color-internal!)
-(export gnc:html-markup-style-info-set-font-color!)
-(export gnc:html-markup-style-info-closing-font-tag)
-(export gnc:html-markup-style-info-set-closing-font-tag!)
+(export gnc:html-markup-style-info-font-face)               ;deprecated
+(export gnc:html-markup-style-info-set-font-face-internal!) ;deprecated
+(export gnc:html-markup-style-info-set-font-face!)          ;deprecated
+(export gnc:html-markup-style-info-font-size)               ;deprecated
+(export gnc:html-markup-style-info-set-font-size-internal!) ;deprecated
+(export gnc:html-markup-style-info-set-font-size!)          ;deprecated
+(export gnc:html-markup-style-info-font-color)              ;deprecated
+(export gnc:html-markup-style-info-set-font-color-internal!) ;deprecated
+(export gnc:html-markup-style-info-set-font-color!)          ;deprecated
+(export gnc:html-markup-style-info-closing-font-tag)         ;deprecated
+(export gnc:html-markup-style-info-set-closing-font-tag!)    ;deprecated
 (export gnc:html-markup-style-info-inheritable?)
 (export gnc:html-markup-style-info-set-inheritable?!)
 (export gnc:html-markup-style-info-set-attribute!)
@@ -563,6 +563,7 @@
 (export gnc:make-html-table-header-cell)
 (export gnc:make-html-table-header-cell/markup)
 (export gnc:make-html-table-header-cell/size)
+(export gnc:make-html-table-cell/min-width)
 (export gnc:html-table-cell?)
 (export gnc:html-table-cell-rowspan)
 (export gnc:html-table-cell-set-rowspan!)
@@ -585,6 +586,8 @@
 (export gnc:html-table-set-caption!)
 (export gnc:html-table-col-headers)
 (export gnc:html-table-set-col-headers!)
+(export gnc:html-table-multirow-col-headers)
+(export gnc:html-table-set-multirow-col-headers!)
 (export gnc:html-table-row-headers)
 (export gnc:html-table-set-row-headers!)
 (export gnc:html-table-style)
@@ -665,6 +668,7 @@
 (export gnc:html-markup-h3)
 (export gnc:html-markup-br)
 (export gnc:html-markup-hr)
+(export gnc:html-markup-ol)
 (export gnc:html-markup-ul)
 (export gnc:html-markup-anchor)
 (export gnc:html-markup-img)
@@ -685,15 +689,19 @@
 (export gnc:account-get-type-string-plural)
 (export gnc:accounts-get-commodities)
 (export gnc:get-current-account-tree-depth)
-(export gnc:acccounts-get-all-subaccounts)
+(export gnc:accounts-and-all-descendants)
+(export gnc:acccounts-get-all-subaccounts) ;deprecated
 (export gnc:make-stats-collector)       ;deprecated
 (export gnc:make-drcr-collector)        ;deprecated
 (export gnc:make-value-collector)
 (export gnc:make-number-collector)      ;deprecated
 (export gnc:make-commodity-collector)
+(export gnc:collector+)
+(export gnc:collector-)
 (export gnc:commodity-collector-get-negated)
 (export gnc:commodity-collectorlist-get-merged) ;deprecated
 (export gnc-commodity-collector-commodity-count)
+(export gnc:account-accumulate-at-dates)
 (export gnc:account-get-balance-at-date)
 (export gnc:account-get-balances-at-dates)
 (export gnc:account-get-comm-balance-at-date)
@@ -739,9 +747,13 @@
 (export gnc:get-assoc-account-balances)
 (export gnc:select-assoc-account-balance)
 (export gnc:get-assoc-account-balances-total)
+(export gnc:multiline-to-html-text)
 (export make-file-url)
 (export gnc:strify)
 (export gnc:pk)
+(export gnc:dump-book)
+(export gnc:dump-invoices)
+(export gnc:dump-lot)
 
 ;; trep-engine.scm
 (export gnc:trep-options-generator)

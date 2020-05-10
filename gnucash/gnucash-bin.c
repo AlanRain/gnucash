@@ -69,10 +69,8 @@ static QofLogModule log_module = GNC_MOD_GUI;
  */
 #define __MSWIN_CONSOLE__ 0
 
-#ifdef HAVE_GETTEXT
-#  include <libintl.h>
-#  include <locale.h>
-#endif
+#include <libintl.h>
+#include <locale.h>
 
 #ifdef MAC_INTEGRATION
 #  include <Foundation/Foundation.h>
@@ -440,7 +438,7 @@ gnc_parse_command_line(int *argc, char ***argv)
     GError *error = NULL;
     GOptionContext *context = g_option_context_new (_("- GnuCash, accounting for personal and small business finance"));
 
-    g_option_context_add_main_entries (context, options, GETTEXT_PACKAGE);
+    g_option_context_add_main_entries (context, options, PROJECT_NAME);
     g_option_context_add_group (context, gtk_get_option_group(FALSE));
     if (!g_option_context_parse (context, argc, argv, &error))
     {
@@ -848,6 +846,7 @@ redirect_stdout (void)
 int
 main(int argc, char ** argv)
 {
+    gchar *localedir = gnc_path_get_localedir();
 #if !defined(G_THREADS_ENABLED) || defined(G_THREADS_IMPL_NONE)
 #    error "No GLib thread implementation available!"
 #endif
@@ -875,7 +874,6 @@ main(int argc, char ** argv)
     gnc_environment_setup();
 #if ! defined MAC_INTEGRATION && ! defined __MINGW32__/* setlocale already done */
     sys_locale = g_strdup (setlocale (LC_ALL, ""));
-#endif
     if (!sys_locale)
       {
         g_print ("The locale defined in the environment isn't supported. "
@@ -883,17 +881,13 @@ main(int argc, char ** argv)
         g_setenv ("LC_ALL", "C", TRUE);
         setlocale (LC_ALL, "C");
       }
-#ifdef HAVE_GETTEXT
-    {
-        gchar *localedir = gnc_path_get_localedir();
-        bindtextdomain(GETTEXT_PACKAGE, localedir);
-	bindtextdomain("iso_4217", localedir); // For win32 to find currency name translations
-	bind_textdomain_codeset("iso_4217", "UTF-8");
-	textdomain(GETTEXT_PACKAGE);
-        bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
-        g_free(localedir);
-    }
 #endif
+    bindtextdomain(PROJECT_NAME, localedir);
+    bindtextdomain("iso_4217", localedir); // For win32 to find currency name translations
+    bind_textdomain_codeset("iso_4217", "UTF-8");
+    textdomain(PROJECT_NAME);
+    bind_textdomain_codeset(PROJECT_NAME, "UTF-8");
+    g_free(localedir);
 
     gnc_parse_command_line(&argc, &argv);
     gnc_print_unstable_message();
@@ -907,15 +901,11 @@ main(int argc, char ** argv)
 
     gnc_log_init();
 
-#ifndef MAC_INTEGRATION
-    /* Write some locale details to the log to simplify debugging
-     * To be on the safe side, only do this if not on OS X,
-     * to avoid unintentionally messing up the locale settings */
+    /* Write some locale details to the log to simplify debugging */
     PINFO ("System locale returned %s", sys_locale ? sys_locale : "(null)");
     PINFO ("Effective locale set to %s.", setlocale (LC_ALL, NULL));
     g_free (sys_locale);
     sys_locale = NULL;
-#endif
 
     /* If asked via a command line parameter, fetch quotes only */
     if (add_quotes_file)

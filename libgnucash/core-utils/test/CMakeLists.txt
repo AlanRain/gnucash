@@ -25,7 +25,7 @@ endif()
 if (MAC_INTEGRATION)
   target_compile_options(test-userdata-dir PRIVATE ${OSX_EXTRA_COMPILE_FLAGS})
   target_compile_definitions(test-userdata-dir PRIVATE ${GTK_MAC_CFLAGS_OTHER})
-endif(MAC_INTEGRATION)
+endif()
 
 set(gtest_core_utils_INCLUDES
   ${MODULEPATH}
@@ -47,8 +47,7 @@ set(test_gnc_path_util_SOURCES
   ${MODULEPATH}/binreloc.c
   ${MODULEPATH}/gnc-filepath-utils.cpp
   ${MODULEPATH}/gnc-locale-utils.cpp
-  gtest-path-utilities.cpp
-  ${GTEST_SRC})
+  gtest-path-utilities.cpp)
 
 gnc_add_test(test-gnc-path-util "${test_gnc_path_util_SOURCES}"
   gtest_core_utils_INCLUDES gtest_core_utils_LIBS "GNC_UNINSTALLED=yes")

@@ -70,7 +70,7 @@ typedef struct GncPluginMenuAdditionsPrivate
 } GncPluginMenuAdditionsPrivate;
 
 #define GNC_PLUGIN_MENU_ADDITIONS_GET_PRIVATE(o)  \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_PLUGIN_MENU_ADDITIONS, GncPluginMenuAdditionsPrivate))
+   ((GncPluginMenuAdditionsPrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_PLUGIN_MENU_ADDITIONS))
 
 
 /** Per-window private data for this plugin.  This plugin is unique in
@@ -424,7 +424,7 @@ gnc_plugin_menu_additions_add_to_window (GncPlugin *plugin,
     per_window.window = window;
     per_window.ui_manager = window->ui_merge;
     per_window.group = gtk_action_group_new ("MenuAdditions" );
-    gtk_action_group_set_translation_domain (per_window.group, GETTEXT_PACKAGE);
+    gtk_action_group_set_translation_domain (per_window.group, PROJECT_NAME);
     per_window.merge_id = gtk_ui_manager_new_merge_id(window->ui_merge);
     gtk_ui_manager_insert_action_group(window->ui_merge, per_window.group, 0);
 

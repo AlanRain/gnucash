@@ -79,7 +79,7 @@ GType gnc_tree_view_get_type (void);
 #define REAL_TITLE  "real_title"
 
 /* The name of this column to use when saving the view's state.  It is
- * used internally to map this colum's properties to the saved state. */
+ * used internally to map this column's properties to the saved state. */
 #define PREF_NAME  "pref-name"
 
 /* A column with this attribute set cannot be hidden from view. Valid
@@ -438,7 +438,7 @@ gnc_tree_view_get_show_column_menu (GncTreeView *view);
  *  @returns The cell renderer in use in the column.
  */
 GtkCellRenderer *
-gnc_tree_view_column_get_renderer(GtkTreeViewColumn *column);
+gnc_tree_view_column_get_renderer (GtkTreeViewColumn *column);
 
 
 /* Takes a GdkEventKey and the current path and column for the
@@ -446,26 +446,26 @@ gnc_tree_view_column_get_renderer(GtkTreeViewColumn *column);
  * cursor.  Returns the new column and the possibly changed (if
  * navigation wrapped a row) path. */
 void
-gnc_tree_view_keynav(GncTreeView *view, GtkTreeViewColumn **col,
-                     GtkTreePath *path, GdkEventKey *event);
+gnc_tree_view_keynav (GncTreeView *view, GtkTreeViewColumn **col,
+                      GtkTreePath *path, GdkEventKey *event);
 
-/* Returns TRUE if path is a vaid path for the treeview */
+/* Returns TRUE if path is a valid path for the treeview */
 gboolean
-gnc_tree_view_path_is_valid(GncTreeView *view, GtkTreePath *path);
+gnc_tree_view_path_is_valid (GncTreeView *view, GtkTreePath *path);
 
-/** Setup a callback for when the user starts editing so appropiate actions can be taken
+/** Setup a callback for when the user starts editing so appropriate actions can be taken
  *  like disable the actions delete menu option.
  */
 void
-gnc_tree_view_set_editing_started_cb(GncTreeView *view,
-                    GFunc editing_started_cb, gpointer editing_cb_data);
+gnc_tree_view_set_editing_started_cb (GncTreeView *view,
+                     GFunc editing_started_cb, gpointer editing_cb_data);
 
-/** Setup a callback for when the user finishes editing so appropiate actions can be taken
+/** Setup a callback for when the user finishes editing so appropriate actions can be taken
  *  like enable the actions delete menu option.
  */
 void
-gnc_tree_view_set_editing_finished_cb(GncTreeView *view,
-                   GFunc editing_finished_cb, gpointer editing_cb_data);
+gnc_tree_view_set_editing_finished_cb (GncTreeView *view,
+                    GFunc editing_finished_cb, gpointer editing_cb_data);
 
 /** @} */
 

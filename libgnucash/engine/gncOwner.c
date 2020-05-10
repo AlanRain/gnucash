@@ -204,6 +204,29 @@ GncOwnerType gncOwnerGetType (const GncOwner *owner)
     return owner->type;
 }
 
+const char * gncOwnerGetTypeString (const GncOwner *owner)
+{
+    GncOwnerType type = gncOwnerGetType(owner);
+    switch (type)
+    {
+    case GNC_OWNER_NONE:
+        return N_("None");
+    case GNC_OWNER_UNDEFINED:
+        return N_("Undefined");
+    case GNC_OWNER_CUSTOMER:
+        return N_("Customer");
+    case GNC_OWNER_JOB:
+        return N_("Job");
+    case GNC_OWNER_VENDOR:
+        return N_("Vendor");
+    case GNC_OWNER_EMPLOYEE:
+        return N_("Employee");
+    default:
+        PWARN ("Unknown owner type");
+        return NULL;
+    }
+}
+
 QofIdTypeConst
 qofOwnerGetType(const GncOwner *owner)
 {
@@ -815,8 +838,6 @@ gncOwnerCreatePaymentLotSecs (const GncOwner *owner, Transaction **preset_txn,
         xaccTransSetDescription (txn, name ? name : "");
         /* set per book option */
         xaccTransSetCurrency (txn, commodity);
-        xaccTransSetDateEnteredSecs (txn, gnc_time (NULL));
-        xaccTransSetDatePostedSecs (txn, date);
 
 
         /* The split for the transfer account */
@@ -868,6 +889,10 @@ gncOwnerCreatePaymentLotSecs (const GncOwner *owner, Transaction **preset_txn,
     /* Mark the transaction as a payment */
     gnc_set_num_action (txn, NULL, num, _("Payment"));
     xaccTransSetTxnType (txn, TXN_TYPE_PAYMENT);
+
+    /* Set date for transaction */
+    xaccTransSetDateEnteredSecs (txn, gnc_time (NULL));
+    xaccTransSetDatePostedSecs (txn, date);
 
     /* Commit this new transaction */
     xaccTransCommitEdit (txn);

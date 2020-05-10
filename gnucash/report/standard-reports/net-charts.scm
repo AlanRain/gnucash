@@ -251,27 +251,19 @@
     ;; gets an account alist balances
     ;; output: (list acc bal0 bal1 bal2 ...)
     (define (account->balancelist account)
-      (let ((ignore-closing? (not (gnc:account-is-inc-exp? account))))
+      (let ((comm (xaccAccountGetCommodity account)))
         (cons account
-              (gnc:account-get-balances-at-dates
+              (gnc:account-accumulate-at-dates
                account dates-list
-               #:split->amount
-               (lambda (s)
-                 (and (or ignore-closing?
-                          (not (xaccTransGetIsClosingTxn
-                                (xaccSplitGetParent s))))
-                      (xaccSplitGetAmount s)))))))
+               #:split->elt (lambda (s)
+                              (gnc:make-gnc-monetary
+                               comm (xaccSplitGetNoclosingBalance s)))
+               #:nosplit->elt (gnc:make-gnc-monetary comm 0)))))
 
     ;; This calculates the balances for all the 'account-balances' for
     ;; each element of the list 'dates'. Uses the collector->monetary
     ;; conversion function above. Returns a list of gnc-monetary.
     (define (process-datelist account-balances dates left-col?)
-
-      (define (collector-minus coll1 coll2)
-        (let ((res (gnc:make-commodity-collector)))
-          (res 'merge coll1 #f)
-          (res 'minusmerge coll2 #f)
-          res))
 
       (define accountlist
         (if inc-exp?
@@ -310,16 +302,14 @@
                   (cons
                    (collector->monetary
                     (if inc-exp?
-                        (collector-minus (car acct-balances) (cadr acct-balances))
+                        (gnc:collector- (car acct-balances) (cadr acct-balances))
                         (car acct-balances))
                     (if inc-exp? (cadr dates) (car dates)))
                    result)))))
 
     (gnc:report-percent-done 1)
     (set! commodity-list (gnc:accounts-get-commodities
-                          (append
-                           (gnc:acccounts-get-all-subaccounts accounts)
-                           accounts)
+                          (gnc:accounts-and-all-descendants accounts)
                           report-currency))
     (gnc:report-percent-done 10)
     (set! exchange-fn (gnc:case-exchange-time-fn

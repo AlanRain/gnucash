@@ -66,6 +66,7 @@ static QofLogModule log_module = GNC_MOD_IMPORT;
 GNCImportMainMatcher *gnc_ofx_importer_gui = NULL;
 static gboolean auto_create_commodity = FALSE;
 static Account *ofx_parent_account = NULL;
+static gint num_trans_processed = 0;
 
 GList *ofx_created_commodites = NULL;
 
@@ -538,7 +539,7 @@ int ofx_proc_transaction_cb(struct OfxTransactionData data, void *user_data)
         g_free(tmp);
     }
 
-    //PERR("WRITEME: GnuCash ofx_proc_transaction():Add PAYEE and ADRESS here once supported by libofx! Notes=%s\n", notes);
+    //PERR("WRITEME: GnuCash ofx_proc_transaction():Add PAYEE and ADDRESS here once supported by libofx! Notes=%s\n", notes);
 
     /* Ideally, gnucash should process the corrected transactions */
     if (data.fi_id_corrected_valid)
@@ -624,10 +625,10 @@ int ofx_proc_transaction_cb(struct OfxTransactionData data, void *user_data)
             {
                 // As we now have the commodity, select the account with that commodity.
 
-                investment_account_text = g_strdup_printf( /* This string is a default account
-                                                              name. It MUST NOT contain the
-                                                              character ':' anywhere in it or
-                                                              in any translations.  */
+                /* Translators: This string is a default account name. It MUST
+                 * NOT contain the character ':' anywhere in it or in any
+                 * translations.  */
+                investment_account_text = g_strdup_printf(
                                          _("Stock account for security \"%s\""),
                              sanitize_string (data.security_data_ptr->secname));
 
@@ -793,10 +794,10 @@ int ofx_proc_transaction_cb(struct OfxTransactionData data, void *user_data)
                     if (income_account == NULL)
                     {
                         DEBUG("Couldn't find an associated income account");
-                        investment_account_text = g_strdup_printf( /* This string is a default account
-                                                                      name. It MUST NOT contain the
-                                                                      character ':' anywhere in it or
-                                                                      in any translations.  */
+                        /* Translators: This string is a default account
+                         * name. It MUST NOT contain the character ':' anywhere
+                         * in it or in any translations.  */
+                        investment_account_text = g_strdup_printf(
                                                       _("Income account for security \"%s\""),
                                                       sanitize_string (data.security_data_ptr->secname));
                         income_account = gnc_import_select_account(
@@ -889,7 +890,7 @@ int ofx_proc_transaction_cb(struct OfxTransactionData data, void *user_data)
         xaccTransDestroy(transaction);
         xaccTransCommitEdit(transaction);
     }
-
+    num_trans_processed += 1;
     return 0;
 }//end ofx_proc_transaction()
 
@@ -1031,6 +1032,8 @@ void gnc_file_ofx_import (GtkWindow *parent)
     char *selected_filename;
     char *default_dir;
     LibofxContextPtr libofx_context = libofx_get_new_context();
+    GList *filters = NULL;
+    GtkFileFilter* filter = gtk_file_filter_new ();
 
     ofx_PARSER_msg = false;
     ofx_DEBUG_msg = false;
@@ -1042,9 +1045,13 @@ void gnc_file_ofx_import (GtkWindow *parent)
     DEBUG("gnc_file_ofx_import(): Begin...\n");
 
     default_dir = gnc_get_default_directory(GNC_PREFS_GROUP);
+    gtk_file_filter_set_name (filter, _("Open/Quicken Financial Exchange file (*.ofx, *.qfx)"));
+    gtk_file_filter_add_pattern (filter, "*.[oqOQ][fF][xX]");
+    filters = g_list_prepend( filters, filter );
+
     selected_filename = gnc_file_dialog(parent,
                                         _("Select an OFX/QFX file to process"),
-                                        NULL,
+                                        filters,
                                         default_dir,
                                         GNC_FILE_DIALOG_IMPORT);
     g_free(default_dir);
@@ -1064,7 +1071,7 @@ void gnc_file_ofx_import (GtkWindow *parent)
         DEBUG("Filename found: %s", selected_filename);
 
         /* Create the Generic transaction importer GUI. */
-        gnc_ofx_importer_gui = gnc_gen_trans_list_new (GTK_WIDGET(parent), NULL, FALSE, 42);
+        gnc_ofx_importer_gui = gnc_gen_trans_list_new (GTK_WIDGET(parent), NULL, FALSE, 42, FALSE);
 
         /* Look up the needed preferences */
         auto_create_commodity =
@@ -1085,8 +1092,21 @@ void gnc_file_ofx_import (GtkWindow *parent)
 #endif
 
         DEBUG("Opening selected file");
+        num_trans_processed = 0;
         libofx_proc_file(libofx_context, selected_filename, AUTODETECT);
+        // Now would be a good time to see whether the view has anything in it!
+        if(gnc_gen_trans_list_empty(gnc_ofx_importer_gui))
+        {
+            gnc_gen_trans_list_delete (gnc_ofx_importer_gui);
+            if(num_trans_processed)
+                gnc_info_dialog(parent,_("OFX file imported, %d transactions processed, no transactions to match"),num_trans_processed);
+        }
+        else
+        {
+            gnc_gen_trans_list_show_all(gnc_ofx_importer_gui);
+        }
         g_free(selected_filename);
+        
     }
 
     if (ofx_created_commodites)

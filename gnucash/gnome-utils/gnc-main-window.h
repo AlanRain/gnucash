@@ -362,7 +362,7 @@ void gnc_main_window_restore_default_state(GncMainWindow *window);
  *  If any page returns a failure indication, then the function stops
  *  walking pages and immediately returns a failure.
  *
- *  @param window Whe window whose pages should be checked.
+ *  @param window When window whose pages should be checked.
  *
  *  @return FALSE if any page could not or would not comply, which
  *  should cancel the pending operation.  TRUE otherwise */
@@ -391,7 +391,7 @@ void gnc_main_window_all_action_set_sensitive (const gchar *action_name, gboolea
 
 /** Find action in main window.
  *
- *  @param window Whe window which should be checked for the action.
+ *  @param window When window which should be checked for the action.
  *
  *  @param name The name of the command to be retrieved.
  *
@@ -424,7 +424,7 @@ GtkWidget *gnc_book_options_dialog_cb (gboolean modal, gchar *title,
 
 /**
  * Processes selected options in the Book Options dialog: checks book_currency
- * and use_split_action_for_num to see if features kvp shuold be set. To be used
+ * and use_split_action_for_num to see if features kvp should be set. To be used
  * where ever a new book situation requires book option selection (e.g., not
  * just in Book Options dialog opened from main window but also in new-file
  * assistant).

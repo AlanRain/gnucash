@@ -63,6 +63,7 @@
 (define gnc:menuname-budget (N_ "B_udget"))
 (define gnc:menuname-taxes (N_ "_Taxes"))
 (define gnc:menuname-utility (N_ "_Sample & Custom"))
+(define gnc:menuname-experimental (N_ "_Experimental"))
 (define gnc:menuname-custom (N_ "_Custom"))
 (define gnc:pagename-general (N_ "General"))
 (define gnc:pagename-accounts (N_ "Accounts"))
@@ -175,7 +176,7 @@ not found.")))
           (hash-set! *gnc:_report-templates_* report-guid report-rec)))
 
        (else
-        ;;there is no parent found -> this is an inital faulty report definition
+        ;;there is no parent found -> this is an initial faulty report definition
         (gui-error (string-append rpterr-guid1 report-name rpterr-guid2))))))))
 
 (define gnc:report-template-version
@@ -667,7 +668,7 @@ not found.")))
 ;; These condititions are:
 ;; 1. the report is an instance of an existing custom report template
 ;;    (ie a template that is stored in the savefile already)
-;; 2. an overwrite is requestes by setting overwrite? to #t
+;; 2. an overwrite is requested by setting overwrite? to #t
 (define (gnc:report-to-template report overwrite?)
   ;; This implements the Save Report Configuration tasks
   (let* ((custom-template-id (gnc:report-custom-template report))

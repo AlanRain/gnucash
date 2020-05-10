@@ -22,9 +22,6 @@
  * Boston, MA  02110-1301,  USA       gnu@gnu.org                   *
  ********************************************************************/
 
-// libgtkhtml docs:
-// http://www.fifi.org/doc/libgtkhtml-dev/html/
-
 #include <config.h>
 
 #include <platform.h>
@@ -74,8 +71,10 @@ G_DEFINE_ABSTRACT_TYPE(GncHtml, gnc_html, GTK_TYPE_BIN)
 static void gnc_html_class_init( GncHtmlClass* klass );
 static void gnc_html_dispose( GObject* obj );
 static void gnc_html_finalize( GObject* obj );
-
-//#define GNC_HTML_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE((o), GNC_TYPE_HTML, GncHtmlPrivate))
+/*
+#define GNC_HTML_GET_PRIVATE(o) \
+     ((GncHtmlPrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_HTML))
+*/
 #define GNC_HTML_GET_PRIVATE(o) (GNC_HTML(o)->priv)
 
 #include "gnc-html-p.h"
@@ -535,10 +534,11 @@ void
 gnc_html_print (GncHtml* self, const char *jobname, gboolean export_pdf)
 #else
 void
-gnc_html_print (GncHtml* self)
+gnc_html_print (GncHtml* self, const char *jobname)
 #endif
 {
     g_return_if_fail( self != NULL );
+     g_return_if_fail( jobname != NULL );
     g_return_if_fail( GNC_IS_HTML(self) );
 
     if ( GNC_HTML_GET_CLASS(self)->print != NULL )
@@ -546,7 +546,7 @@ gnc_html_print (GncHtml* self)
 #ifdef WEBKIT1
       GNC_HTML_GET_CLASS(self)->print (self, jobname, export_pdf);
 #else
-        GNC_HTML_GET_CLASS(self)->print (self);
+        GNC_HTML_GET_CLASS(self)->print (self, jobname);
 #endif
     }
     else

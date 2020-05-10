@@ -103,7 +103,7 @@
 
 <!-- ====================================================================== -->
 <!-- The HTML for the invoice starts here -->
-<html>
+<html dir='auto'>
 <head>
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" >
 <title><?scm:d (_ "Invoice") ?> <?scm:d invoiceid ?></title>
@@ -140,7 +140,7 @@
   <!-- header texts -->
 
   <h1><?scm:d (nbsp (_ "Invoice No.")) ?> <?scm:d invoiceid ?></h1>
-  <h2><?scm:d (strftime	opt-date-format (localtime (gnc:get-today))) ?></h2>
+  <h2><?scm:d (gnc-print-time64 (gnc:get-today) opt-date-format) ?></h2>
   <p>&nbsp;</p>
   <?scm (if (not (string=? billcontact "")) (begin ?>
     <p>Attn: <?scm:d billcontact ?></p><br>

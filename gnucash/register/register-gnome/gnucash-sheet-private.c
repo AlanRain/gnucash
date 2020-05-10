@@ -136,7 +136,7 @@ find_cell_by_pixel (GnucashSheet *sheet, gint x, gint y,
     {
         cd = gnucash_style_get_cell_dimensions (style, row, 0);
 
-        if (y >= cd->origin_y && y < cd->origin_y + cd->pixel_height)
+        if (cd && y >= cd->origin_y && y < cd->origin_y + cd->pixel_height)
             break;
 
         row++;
@@ -150,7 +150,7 @@ find_cell_by_pixel (GnucashSheet *sheet, gint x, gint y,
     {
         cd = gnucash_style_get_cell_dimensions (style, row, col);
 
-        if (x >= cd->origin_x && x < cd->origin_x + cd->pixel_width)
+        if (cd && x >= cd->origin_x && x < cd->origin_x + cd->pixel_width)
             break;
 
         col++;
@@ -245,7 +245,7 @@ static guint8 inc_intensity_byte(guint8 input, int numerator, int denominator)
 }
 
 /** For a given RGB value, increase the color intensity for each of the three
-colors indentically by 10 percent (i.e. make them "less black" and "more gray")
+colors identically by 10 percent (i.e. make them "less black" and "more gray")
 and return this changed RGB value. */
 static guint32 inc_intensity_10percent(guint32 argb)
 {
@@ -269,7 +269,7 @@ static guint8 dec_intensity_byte(guint8 input, int numerator, int denominator)
 }
 
 /** For a given RGB value, decrease the color intensity for each of the three
-colors indentically by 10 percent and return this changed RGB value. */
+colors identically by 10 percent and return this changed RGB value. */
 static guint32 dec_intensity_10percent(guint32 argb)
 {
     // Multiply each single byte by 9/10 i.e. by 0.9 which decreases the
@@ -283,7 +283,7 @@ static guint32 dec_intensity_10percent(guint32 argb)
 
 /* Actual drawing routines */
 
-G_INLINE_FUNC void
+static inline void
 draw_cell_line (cairo_t *cr, GdkRGBA *bg_color,
                 double x1, double y1, double x2, double y2,
                 PhysicalCellBorderLineStyle style);
@@ -572,6 +572,8 @@ draw_block (GnucashSheet *sheet,
                  (block->style,
                   virt_loc.phys_row_offset,
                   virt_loc.phys_col_offset);
+
+            if (!cd) break;
 
             x_paint = block->origin_x + cd->origin_x - x;
             if (x_paint > width)

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.20.0 -->
+<!-- Generated with glade 3.22.1 -->
 <interface>
   <requires lib="gtk+" version="3.10"/>
   <object class="GtkAdjustment" id="adjustment1">
@@ -129,6 +129,9 @@
     <property name="title" translatable="yes">Save Custom Check Format</property>
     <property name="window_position">center-on-parent</property>
     <property name="type_hint">dialog</property>
+    <child>
+      <placeholder/>
+    </child>
     <child internal-child="vbox">
       <object class="GtkBox" id="dialog-vbox7">
         <property name="visible">True</property>
@@ -281,6 +284,9 @@
     <property name="resizable">False</property>
     <property name="type_hint">dialog</property>
     <signal name="response" handler="gnc_ui_print_check_response_cb" swapped="no"/>
+    <child>
+      <placeholder/>
+    </child>
     <child internal-child="vbox">
       <object class="GtkBox" id="dialog-vbox6">
         <property name="visible">True</property>
@@ -361,7 +367,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="halign">start</property>
-                    <property name="label" translatable="yes">Check _format:</property>
+                    <property name="label" translatable="yes">Check _format</property>
                     <property name="use_underline">True</property>
                     <property name="justify">center</property>
                     <property name="mnemonic_widget">check_format_combobox</property>
@@ -376,7 +382,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="halign">start</property>
-                    <property name="label" translatable="yes">Check po_sition:</property>
+                    <property name="label" translatable="yes">Check po_sition</property>
                     <property name="use_underline">True</property>
                     <property name="justify">center</property>
                     <property name="mnemonic_widget">check_position_combobox</property>
@@ -392,7 +398,7 @@
                     <property name="can_focus">False</property>
                     <property name="halign">start</property>
                     <property name="valign">start</property>
-                    <property name="label" translatable="yes">_Date format:</property>
+                    <property name="label" translatable="yes">_Date format</property>
                     <property name="use_underline">True</property>
                     <property name="justify">center</property>
                   </object>
@@ -535,7 +541,7 @@ to print an address on the check.</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="halign">start</property>
-                    <property name="label" translatable="yes">Checks on first _page:</property>
+                    <property name="label" translatable="yes">Checks on first _page</property>
                     <property name="use_underline">True</property>
                     <property name="mnemonic_widget">first_page_count_entry</property>
                   </object>
@@ -656,7 +662,7 @@ to print an address on the check.</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="halign">start</property>
-                    <property name="label" translatable="yes">Pa_yee:</property>
+                    <property name="label" translatable="yes">Pa_yee</property>
                     <property name="use_underline">True</property>
                     <property name="justify">center</property>
                     <property name="mnemonic_widget">payee_x_entry</property>
@@ -671,7 +677,7 @@ to print an address on the check.</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="halign">start</property>
-                    <property name="label" translatable="yes">_Date:</property>
+                    <property name="label" translatable="yes">_Date</property>
                     <property name="use_underline">True</property>
                     <property name="justify">center</property>
                     <property name="mnemonic_widget">date_x_entry</property>
@@ -686,7 +692,7 @@ to print an address on the check.</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="halign">start</property>
-                    <property name="label" translatable="yes">Amount (_words):</property>
+                    <property name="label" translatable="yes">Amount (_words)</property>
                     <property name="use_underline">True</property>
                     <property name="justify">center</property>
                     <property name="mnemonic_widget">amount_words_x_entry</property>
@@ -701,7 +707,7 @@ to print an address on the check.</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="halign">start</property>
-                    <property name="label" translatable="yes">Amount (_numbers):</property>
+                    <property name="label" translatable="yes">Amount (_numbers)</property>
                     <property name="use_underline">True</property>
                     <property name="justify">center</property>
                     <property name="mnemonic_widget">amount_numbers_x_entry</property>
@@ -716,7 +722,7 @@ to print an address on the check.</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="halign">start</property>
-                    <property name="label" translatable="yes">_Notes:</property>
+                    <property name="label" translatable="yes">_Notes</property>
                     <property name="use_underline">True</property>
                     <property name="justify">center</property>
                     <property name="mnemonic_widget">notes_x_entry</property>
@@ -909,7 +915,7 @@ to print an address on the check.</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="halign">start</property>
-                    <property name="label" translatable="yes">_Units:</property>
+                    <property name="label" translatable="yes">_Units</property>
                     <property name="use_underline">True</property>
                     <property name="justify">center</property>
                     <property name="mnemonic_widget">units_combobox</property>
@@ -940,7 +946,7 @@ to print an address on the check.</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="halign">start</property>
-                    <property name="label" translatable="yes">_Translation:</property>
+                    <property name="label" translatable="yes">_Translation</property>
                     <property name="use_underline">True</property>
                     <property name="justify">center</property>
                     <property name="mnemonic_widget">translation_x_entry</property>
@@ -1054,7 +1060,7 @@ to print an address on the check.</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="halign">start</property>
-                    <property name="label" translatable="yes">_Address:</property>
+                    <property name="label" translatable="yes">_Address</property>
                     <property name="use_underline">True</property>
                   </object>
                   <packing>
@@ -1099,7 +1105,7 @@ to print an address on the check.</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="halign">start</property>
-                    <property name="label" translatable="yes">_Memo:</property>
+                    <property name="label" translatable="yes">_Memo</property>
                     <property name="use_underline">True</property>
                     <property name="justify">center</property>
                     <property name="mnemonic_widget">memo_x_entry</property>

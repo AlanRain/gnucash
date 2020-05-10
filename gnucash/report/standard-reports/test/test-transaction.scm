@@ -15,8 +15,8 @@
 
 ;; Guide to the test-transaction.scm
 
-;; This test-transation will implement regression testing for most
-;; features from transction.scm as of March 2018. It requires SRFI-64
+;; This test-transaction will implement regression testing for most
+;; features from transaction.scm as of March 2018. It requires SRFI-64
 ;; (present in guile-2.0.10 or later), SXML, and VM.  SRFI-64 and SXML
 ;; are mandatory and has tremendously eased creation of tests. The VM
 ;; modules are only required to perform coverage analysis of this test
@@ -347,6 +347,12 @@
       (let ((sxml (options->sxml options "transaction filter not.s? regex")))
         (test-equal "transaction filter in bank to 'not.s?' and switch regex, sum = -$23.00"
           '("-$23.00")
+          (get-row-col sxml -1 -1)))
+
+      (set-option! options "Filter" "Transaction Filter excludes matched strings" #t)
+      (let ((sxml (options->sxml options "negate transaction filter not.s?")))
+        (test-equal "transaction filter in bank to 'not.s?' and switch regex, sum = -$23.00"
+          '("$24.00")
           (get-row-col sxml -1 -1)))
 
       ;; Test Reconcile Status Filters
@@ -858,7 +864,40 @@
           (list "$0.33" "$10.33" "-$9.67" "$1.00")
           (get-row-col sxml #f 6))))
     (test-end "subtotal table")
-    ))
+
+    (test-begin "csv-export")
+    (test-assert "csv output is valid"
+      (let ((options (default-testing-options)))
+        (set-option! options "Accounts" "Accounts"
+                     (list bank usd-bank gbp-bank gbp-income income expense))
+        (set-option! options "General" "Start Date"
+                     (cons 'absolute (gnc-dmy2time64 01 01 1969)))
+        (set-option! options "General" "End Date"
+                     (cons 'absolute (gnc-dmy2time64 31 12 1970)))
+        (set-option! options "Display" "Subtotal Table" #t)
+        (set-option! options "General" "Common Currency" #t)
+        (set-option! options "General" "Report Currency" foreign2)
+        (set-option! options "General" "Show original currency amount" #t)
+        (set-option! options "Sorting" "Primary Key" 'account-name)
+        (set-option! options "Sorting" "Primary Subtotal" #t)
+        (set-option! options "Sorting" "Secondary Key" 'date)
+        (set-option! options "Sorting" "Secondary Subtotal for Date Key" 'monthly)
+
+        (let* ((template (gnc:find-report-template trep-uuid))
+               (constructor (record-constructor <report>))
+               (report (constructor trep-uuid "bar" options #t #t #f #f ""))
+               (renderer (gnc:report-template-renderer template)))
+          ;; run the renderer, ignore its output. we'll query the csv export.
+          (renderer report #:export-type 'csv #:filename "/tmp/export.csv"))
+        (let ((call-with-input-file "/tmp/export.csv"))
+          (lambda (f)
+            (let lp ((c (read-char f)) (out '()))
+              (if (eof-object? c)
+                  (string=?
+                   "\"from\",\"01/01/69\"\n\"to\",\"12/31/70\"\n\"Amount (GBP)\",2.15\n\"Amount\",3.0"
+                   (reverse-list->string out))
+                  (lp (read-char f) (cons c out))))))))
+    (test-end "csv-export")))
 
 (define (reconcile-tests)
   (let* ((env (create-test-env))

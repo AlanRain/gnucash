@@ -41,6 +41,16 @@ set(sysconfdir ${CMAKE_INSTALL_FULL_SYSCONFDIR})
 set(localedir "${CMAKE_INSTALL_FULL_DATAROOTDIR}/locale")
 configure_file(gncla-dir.h.in gncla-dir.h)
 
+
+
+# ---
+if (BUILDING_FROM_VCS)
+  set(VCS_INFO_BASE_DIR ${CMAKE_BINARY_DIR})
+else()
+  set(VCS_INFO_BASE_DIR ${CMAKE_SOURCE_DIR})
+endif()
+set(VCS_INFO_FILE ${VCS_INFO_BASE_DIR}/libgnucash/core-utils/gnc-vcs-info.h CACHE STRING "path to gnc-vcs-dir")
+
 ### Create gnc-vcs-info.h
 # This can only be done when building from a vcs (git/svn/bzr/svk) working directory.
 # This file is shipped in the distribution tarball, so no need to generate it in that case anyway.
@@ -54,42 +64,17 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/gnc-vcs-info.h.in
 #define GNC_VCS_REV_Y_M \"@GNC_VCS_REV_Y_M@\"
 ")
 
-set(SCM_REV_COMMAND "${CMAKE_SOURCE_DIR}/util/gnc-vcs-info -r")
-set(SCM_REV_DATE_COMMAND "${CMAKE_SOURCE_DIR}/util/gnc-vcs-info -d")
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/version.cmake
-  "execute_process(
-    COMMAND ${SHELL} ${SCM_REV_COMMAND} ${CMAKE_SOURCE_DIR}
-    OUTPUT_VARIABLE GNC_VCS_REV
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-  execute_process(
-    COMMAND ${SHELL} ${SCM_REV_DATE_COMMAND} ${CMAKE_SOURCE_DIR}
-    OUTPUT_VARIABLE GNC_VCS_REV_DATE
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-  string(SUBSTRING \${GNC_VCS_REV_DATE} 0 4 GNC_VCS_REV_YEAR)
-  string(SUBSTRING \${GNC_VCS_REV_DATE} 0 7 GNC_VCS_REV_Y_M)
-  configure_file(\${SRC} \${DST} @ONLY)
-")
-
-if (${CMAKE_VERSION} VERSION_GREATER "3.1")
-  add_custom_target(gnc-vcs-info ALL
+add_custom_target(gnc-vcs-info ALL
     BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/gnc-vcs-info.h
     COMMAND ${CMAKE_COMMAND} -D SRC=${CMAKE_CURRENT_BINARY_DIR}/gnc-vcs-info.h.in
-                     -D DST=${CMAKE_CURRENT_BINARY_DIR}/gnc-vcs-info.h
-                     -P ${CMAKE_CURRENT_BINARY_DIR}/version.cmake
-  )
+                             -D DST=${CMAKE_CURRENT_BINARY_DIR}/gnc-vcs-info.h
+                             -D SRC_DIR=${CMAKE_SOURCE_DIR}
+                             -D SHELL="${SHELL}"
+                             -P ${CMAKE_SOURCE_DIR}/cmake/git2version-info.cmake
+)
 else()
-  # BYPRODUCTS keyword not supported below 3.2
-  add_custom_target(gnc-vcs-info ALL
-    COMMAND ${CMAKE_COMMAND} -D SRC=${CMAKE_CURRENT_BINARY_DIR}/gnc-vcs-info.h.in
-                     -D DST=${CMAKE_CURRENT_BINARY_DIR}/gnc-vcs-info.h
-                     -P ${CMAKE_CURRENT_BINARY_DIR}/version.cmake
-  )
+  add_custom_target(gnc-vcs-info DEPENDS ${VCS_INFO_FILE})
 endif()
-else(BUILDING_FROM_VCS)
-  add_custom_target(gnc-vcs-info DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/gnc-vcs-info.h)
-endif(BUILDING_FROM_VCS)
 dist_add_generated (${BUILDING_FROM_VCS} gnc-vcs-info.h)
 ### Compile library
 
@@ -139,10 +124,10 @@ target_include_directories(gnc-core-utils PUBLIC ${core_utils_ALL_INCLUDES})
 
 if (MAC_INTEGRATION)
   target_compile_options(gnc-core-utils PRIVATE ${OSX_EXTRA_COMPILE_FLAGS})
-endif(MAC_INTEGRATION)
+endif()
 if (BUILDING_FROM_VCS)
   target_compile_definitions(gnc-core-utils PRIVATE -DGNC_VCS=\"git\")
-endif (BUILDING_FROM_VCS)
+endif()
 
 install(TARGETS gnc-core-utils
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

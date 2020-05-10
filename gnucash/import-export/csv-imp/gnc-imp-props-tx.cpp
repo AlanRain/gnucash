@@ -35,6 +35,7 @@ extern "C" {
 #include "Account.h"
 #include "Transaction.h"
 #include "gnc-pricedb.h"
+#include <gnc-exp-parser.h>
 
 }
 
@@ -162,9 +163,8 @@ gnc_commodity* parse_commodity (const std::string& comm_str)
     auto table = gnc_commodity_table_get_table (gnc_get_current_book());
     gnc_commodity* comm = nullptr;
 
-    /* First try commodity as a unique name. */
-    if (comm_str.find("::"))
-        comm = gnc_commodity_table_lookup_unique (table, comm_str.c_str());
+    /* First try commodity as a unique name, returns null if not found */
+    comm = gnc_commodity_table_lookup_unique (table, comm_str.c_str());
 
     /* Then try mnemonic in the currency namespace */
     if (!comm)
@@ -192,6 +192,32 @@ gnc_commodity* parse_commodity (const std::string& comm_str)
         throw std::invalid_argument (_("Value can't be parsed into a valid commodity."));
     else
         return comm;
+}
+
+
+static GncNumeric parse_price (const std::string &str)
+{
+    /* An empty field is treated as zero */
+    if (str.empty())
+        return GncNumeric{};
+
+    /* Strings otherwise containing not digits will be considered invalid */
+    if(!boost::regex_search(str, boost::regex("[0-9]")))
+        throw std::invalid_argument (_("Value doesn't appear to contain a valid number."));
+
+    auto expr = boost::make_u32regex("[[:Sc:]]");
+    std::string str_no_symbols = boost::u32regex_replace(str, expr, "");
+
+    /* Convert based on user chosen currency format */
+    gnc_numeric val = gnc_numeric_zero();
+    char *endptr;
+
+    auto success = gnc_exp_parser_parse (str.c_str(), &val, &endptr);
+    gnc_exp_parser_shutdown();
+    if (!success)
+        throw std::invalid_argument (_("Price can't be parsed into a number."));
+
+    return GncNumeric(val);
 }
 
 void GncPreTrans::set (GncTransPropType prop_type, const std::string& value)
@@ -438,7 +464,7 @@ void GncPreSplit::set (GncTransPropType prop_type, const std::string& value)
 
             case GncTransPropType::PRICE:
                 m_price = boost::none;
-                m_price = parse_amount (value, m_currency_format); // Will throw if parsing fails
+                m_price = parse_price (value); // Will throw if parsing fails
                 break;
 
             case GncTransPropType::REC_STATE:
@@ -500,6 +526,55 @@ void GncPreSplit::reset (GncTransPropType prop_type)
         // Set with an empty string will effectively clear the property
         // but can also set an error for the property. Clear that error here.
         m_errors.erase(prop_type);
+    }
+}
+
+void GncPreSplit::add (GncTransPropType prop_type, const std::string& value)
+{
+    try
+    {
+        // Drop any existing error for the prop_type we're about to add to
+        m_errors.erase(prop_type);
+
+        Account *acct = nullptr;
+        auto num_val = GncNumeric();
+        switch (prop_type)
+        {
+            case GncTransPropType::DEPOSIT:
+                num_val = parse_amount (value, m_currency_format); // Will throw if parsing fails
+                if (m_deposit)
+                    num_val += *m_deposit;
+                m_deposit = num_val;
+                break;
+
+            case GncTransPropType::WITHDRAWAL:
+                num_val = parse_amount (value, m_currency_format); // Will throw if parsing fails
+                if (m_withdrawal)
+                    num_val += *m_withdrawal;
+                m_withdrawal = num_val;
+                break;
+
+            default:
+                /* Issue a warning for all other prop_types. */
+                PWARN ("%d can't be used to add values in a split", static_cast<int>(prop_type));
+                break;
+        }
+    }
+    catch (const std::invalid_argument& e)
+    {
+        auto err_str = std::string(_(gnc_csv_col_type_strs[prop_type])) +
+        std::string(_(" could not be understood.\n")) +
+        e.what();
+        m_errors.emplace(prop_type, err_str);
+        throw std::invalid_argument (err_str);
+    }
+    catch (const std::out_of_range& e)
+    {
+        auto err_str = std::string(_(gnc_csv_col_type_strs[prop_type])) +
+        std::string(_(" could not be understood.\n")) +
+        e.what();
+        m_errors.emplace(prop_type, err_str);
+        throw std::invalid_argument (err_str);
     }
 }
 
@@ -633,7 +708,7 @@ void GncPreSplit::create_split (Transaction* trans)
     if (taccount)
     {
         /* Note: the current importer assumes at most 2 splits. This means the second split amount
-         * will be the negative of the the first split amount.
+         * will be the negative of the first split amount.
          */
         auto inv_price = m_price;
         if (m_price)

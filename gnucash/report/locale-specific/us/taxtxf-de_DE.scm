@@ -14,7 +14,7 @@
 ;; Kennzahlen (from txf-de_DE.scm) as assigned to the different
 ;; accounts, and will write it to some XML file as required by
 ;; e.g. the Winston software
-;; http://www.felfri.de/winston/schnittstellen.htm
+;; https://www.felfri.de/winston/schnittstellen.htm
 ;;
 ;; This file might still contain a lot of US-TXF related stuff. This
 ;; can surely be thrown out once someone was able to actually use this
@@ -152,33 +152,24 @@
     gnc:pagename-general (N_ "Alternate Period")
     "c" (N_ "Override or modify From: & To:.")
     (if after-tax-day 'from-to 'last-year)
-    (list (list->vector
-           (list 'from-to (N_ "Use From - To") (N_ "Use From - To period.")))
-          (list->vector
-           (list '1st-est (N_ "1st Est Tax Quarter") (N_ "Jan 1 - Mar 31.")))
-          (list->vector
-           (list '2nd-est (N_ "2nd Est Tax Quarter") (N_ "Apr 1 - May 31.")))
-          (list->vector
-	   ;; Translators: The US tax quarters are different from
-	   ;; actual year's quarters! See the definition of
-	   ;; tax-qtr-real-qtr-year variable above.
-           (list '3rd-est (N_ "3rd Est Tax Quarter") (N_ "Jun 1 - Aug 31.")))
-          (list->vector
-           (list '4th-est (N_ "4th Est Tax Quarter") (N_ "Sep 1 - Dec 31.")))
-          (list->vector
-           (list 'last-year (N_ "Last Year") (N_ "Last Year.")))
-          (list->vector
-           (list '1st-last (N_ "Last Yr 1st Est Tax Qtr")
-                 (N_ "Jan 1 - Mar 31, Last year.")))
-          (list->vector
-           (list '2nd-last (N_ "Last Yr 2nd Est Tax Qtr")
-                 (N_ "Apr 1 - May 31, Last year.")))
-          (list->vector
-           (list '3rd-last (N_ "Last Yr 3rd Est Tax Qtr")
-                 (N_ "Jun 1 - Aug 31, Last year.")))
-          (list->vector
-           (list '4th-last (N_ "Last Yr 4th Est Tax Qtr")
-                 (N_ "Sep 1 - Dec 31, Last year."))))))
+    (list (vector 'from-to (N_ "Use From - To") (N_ "Use From - To period."))
+          (vector '1st-est (N_ "1st Est Tax Quarter") (N_ "Jan 1 - Mar 31."))
+          (vector '2nd-est (N_ "2nd Est Tax Quarter") (N_ "Apr 1 - May 31."))
+          (vector '3rd-est (N_ "3rd Est Tax Quarter") (N_ "Jun 1 - Aug 31."))
+          (vector '4th-est (N_ "4th Est Tax Quarter") (N_ "Sep 1 - Dec 31."))
+          (vector 'last-year (N_ "Last Year") (N_ "Last Year."))
+          (vector '1st-last
+                  (N_ "Last Yr 1st Est Tax Qtr")
+                  (N_ "Jan 1 - Mar 31, Last year."))
+          (vector '2nd-last
+                  (N_ "Last Yr 2nd Est Tax Qtr")
+                  (N_ "Apr 1 - May 31, Last year."))
+          (vector '3rd-last
+                  (N_ "Last Yr 3rd Est Tax Qtr")
+                  (N_ "Jun 1 - Aug 31, Last year."))
+          (vector '4th-last
+                  (N_ "Last Yr 4th Est Tax Qtr")
+                  (N_ "Sep 1 - Dec 31, Last year.")))))
 
   (gnc:register-tax-option
    (gnc:make-account-list-option
@@ -320,10 +311,10 @@
         (let* ((type (xaccAccountGetType account))
                (code (gnc:account-get-txf-code account))
                (date-str (if date
-                             (strftime "%d.%m.%Y" (gnc-localtime date))
+                             (gnc-print-time64 date "%d.%m.%Y")
                              #f))
                (x-date-str (if x-date
-                               (strftime "%d.%m.%Y" (gnc-localtime x-date))
+                               (gnc-print-time64 x-date "%d.%m.%Y")
                                #f))
                ;; Only formats 1,3 implemented now! Others are treated as 1.
                (format (gnc:get-txf-format code (eq? type ACCT-TYPE-INCOME)))
@@ -408,7 +399,7 @@
 (define (render-level-x-account table level max-level account lx-value
                                 suppress-0 full-names txf-date)
   (let* ((account-name (if txf-date	; special split
-                           (strftime "%d.%m.%Y" (gnc-localtime txf-date))
+                           (gnc-print-time64 txf-date "%d.%m.%Y")
                            (if (or full-names (equal? level 1))
                                (gnc-account-get-full-name account)
                                (xaccAccountGetName account))))
@@ -450,7 +441,7 @@
             end-cells))
           (if (= level 1) (make-header-row table max-level))))))
 
-;; Recursivly validate children if parent is not a tax account.
+;; Recursively validate children if parent is not a tax account.
 ;; Don't check children if parent is valid.
 ;; Returns the Parent if a child or grandchild is valid.
 (define (validate accounts)
@@ -505,11 +496,7 @@
                                 (validate (reverse 
                                            (gnc-account-get-children-sorted
                                             (gnc-get-current-root-account))))))
-         (book (if selected-accounts
-                   (gnc-account-get-book (if (pair? selected-accounts)
-                                             (car selected-accounts)
-                                             selected-accounts))
-                   #f))
+         (book (gnc-get-current-book))
          (generations (if (pair? selected-accounts)
                           (apply max (map (lambda (x) (num-generations x 1))
                                           selected-accounts))
@@ -767,19 +754,12 @@
             ;; Ignore
             '())))
 
-    (let ((from-date  (strftime "%d.%m.%Y" (gnc-localtime from-value)))
-          (to-date    (strftime "%d.%m.%Y" (gnc-localtime to-value)))
-	  (to-year    (strftime "%Y" (gnc-localtime to-value)))
-          (today-date (strftime "%d.%m.%Y" 
-                                (gnc-localtime 
-                                 (time64CanonicalDayTime
-                                       (current-time)))))
-	  (tax-nr (unless book
-                      (or
-                       (gnc:option-get-value book gnc:*tax-label* gnc:*tax-nr-label*)
-                       "")
-                      ""))
-	  )
+    (let ((from-date  (gnc-print-time64 from-value "%d.%m.%Y"))
+          (to-date    (gnc-print-time64 to-value "%d.%m.%Y"))
+	  (to-year    (gnc-print-time64 to-value "%Y"))
+          (today-date (gnc-print-time64 (time64CanonicalDayTime (current-time))
+                                        "%d.%m.%Y"))
+	  (tax-nr (gnc:option-get-value book gnc:*tax-label* gnc:*tax-nr-label*)))
 
       ;; Now, the main body
       ;; Reset all the balance collectors

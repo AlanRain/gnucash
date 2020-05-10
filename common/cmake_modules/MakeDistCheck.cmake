@@ -16,16 +16,11 @@ function(run_dist_check PACKAGE_PREFIX EXT)
     if (${EXT} STREQUAL ".bz2")
         set(TAR_OPTION "jxf")
     endif()
-        
-    set(MY_CMAKE_COMMAND "")
-    if (${CMAKE_VERSION} VERSION_GREATER 3.1)
-        set(MY_CMAKE_COMMAND ${CMAKE_COMMAND} -E env)
-    endif()
 
     FIND_PROGRAM(NINJA_COMMAND NAMES ninja ninja-build)
     if (${NINJA_COMMAND} STREQUAL "NINJA_COMMAND-NOTFOUND")
         message(FATAL_ERROR "Can't find the 'ninja' or 'ninja-build' program.")
-    endif ()
+    endif()
 
     execute_process_and_check_result(
             COMMAND ${CMAKE_COMMAND} -E tar ${TAR_OPTION} ${tarball}
@@ -52,6 +47,7 @@ function(run_dist_check PACKAGE_PREFIX EXT)
               -D CMAKE_INSTALL_PREFIX=../${INSTALL_DIR}
               -D GTEST_ROOT=${GTEST_ROOT}
               -D GMOCK_ROOT=${GMOCK_ROOT}
+              -D WITH_PYTHON=YES
               ../${PACKAGE_PREFIX}
             WORKING_DIRECTORY ${BUILD_DIR}
             ERROR_MSG "CMake configure command failed."
@@ -59,28 +55,28 @@ function(run_dist_check PACKAGE_PREFIX EXT)
 
     # Run ninja in the build directory
     execute_process_and_check_result(
-            COMMAND ${MY_CMAKE_COMMAND} ${NINJA_COMMAND}
+            COMMAND ${CMAKE_COMMAND} -E env ${NINJA_COMMAND}
             WORKING_DIRECTORY ${BUILD_DIR}
             ERROR_MSG "Ninja build failed."
     )
 
     # Run ninja install
     execute_process_and_check_result(
-            COMMAND ${MY_CMAKE_COMMAND} ${NINJA_COMMAND} install
+            COMMAND ${CMAKE_COMMAND} -E env ${NINJA_COMMAND} install
             WORKING_DIRECTORY ${BUILD_DIR}
             ERROR_MSG "Ninja install failed."
     )
 
     # Run ninja check in the build directory
     execute_process_and_check_result(
-            COMMAND ${MY_CMAKE_COMMAND} ${NINJA_COMMAND} check
+            COMMAND ${CMAKE_COMMAND} -E env ${NINJA_COMMAND} check
             WORKING_DIRECTORY ${BUILD_DIR}
             ERROR_MSG "Ninja check failed."
     )
 
     # Run ninja dist
     execute_process_and_check_result(
-            COMMAND ${MY_CMAKE_COMMAND} ${NINJA_COMMAND} dist
+            COMMAND ${CMAKE_COMMAND} -E env ${NINJA_COMMAND} dist
             WORKING_DIRECTORY ${BUILD_DIR}
             ERROR_MSG "Ninja dist failed."
     )

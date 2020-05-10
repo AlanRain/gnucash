@@ -71,6 +71,7 @@ static GtkWidget* add_summary_label( GtkWidget *summarybar, gboolean pack_start,
 static void gsr_summarybar_set_arrow_draw (GNCSplitReg *gsr);
 
 static void gnc_split_reg_determine_read_only( GNCSplitReg *gsr );
+static gboolean is_trans_readonly_and_warn (GtkWindow *parent, Transaction *trans);
 
 static GNCPlaceholderType gnc_split_reg_get_placeholder( GNCSplitReg *gsr );
 static GtkWidget *gnc_split_reg_get_parent( GNCLedgerDisplay *ledger );
@@ -510,9 +511,16 @@ gsr_update_summary_label( GtkWidget *label,
 {
     gnc_numeric amount;
     char string[256];
+    const gchar *label_str = NULL;
+    GtkWidget *text_label, *hbox;
+    gchar *tooltip;
 
     if ( label == NULL )
         return;
+
+    hbox = g_object_get_data (G_OBJECT(label), "text_box");
+    text_label = g_object_get_data (G_OBJECT(label), "text_label");
+    label_str = gtk_label_get_text (GTK_LABEL(text_label));
 
     amount = (*getter)( leader );
 
@@ -533,6 +541,13 @@ gsr_update_summary_label( GtkWidget *label,
 
     gnc_set_label_color( label, amount );
     gtk_label_set_text( GTK_LABEL(label), string );
+
+    if (label_str)
+    {
+        tooltip = g_strdup_printf ("%s %s", label_str, string);
+        gtk_widget_set_tooltip_text (GTK_WIDGET(hbox), tooltip);
+        g_free (tooltip);
+    }
 }
 
 static
@@ -554,7 +569,7 @@ gsr_redraw_all_cb (GnucashRegister *g_reg, gpointer data)
 
     commodity = xaccAccountGetCommodity( leader );
 
-    /* no EURO converson, if account is already EURO or no EURO currency */
+    /* no EURO conversion, if account is already EURO or no EURO currency */
     if (commodity != NULL)
         euro = (gnc_is_euro_currency( commodity ) &&
                 (strncasecmp(gnc_commodity_get_mnemonic(commodity), "EUR", 3)));
@@ -790,10 +805,165 @@ gnc_split_reg_paste_cb (GtkWidget *w, gpointer data)
 }
 
 void
-gsr_default_cut_txn_handler( GNCSplitReg *gsr, gpointer data )
+gsr_default_cut_txn_handler (GNCSplitReg *gsr, gpointer data)
 {
-    gnc_split_register_cut_current
-    (gnc_ledger_display_get_split_register( gsr->ledger ));
+    CursorClass cursor_class;
+    SplitRegister *reg;
+    Transaction *trans;
+    Split *split;
+    GtkWidget *dialog;
+    gint response;
+    const gchar *warning;
+
+    reg = gnc_ledger_display_get_split_register (gsr->ledger);
+
+    /* get the current split based on cursor position */
+    split = gnc_split_register_get_current_split (reg);
+    if (split == NULL)
+    {
+        gnc_split_register_cancel_cursor_split_changes (reg);
+        return;
+    }
+
+    trans = xaccSplitGetParent (split);
+    cursor_class = gnc_split_register_get_current_cursor_class (reg);
+
+    /* test for blank_split reference pointing to split */
+    if (gnc_split_register_is_blank_split (reg, split))
+        gnc_split_register_change_blank_split_ref (reg, split);
+
+    /* Cutting the blank split just cancels */
+    {
+        Split *blank_split = gnc_split_register_get_blank_split (reg);
+
+        if (split == blank_split)
+        {
+            gnc_split_register_cancel_cursor_trans_changes (reg);
+            return;
+        }
+    }
+
+    if (cursor_class == CURSOR_CLASS_NONE)
+        return;
+
+    /* this is probably not required but leave as a double check */
+    if (is_trans_readonly_and_warn (GTK_WINDOW(gsr->window), trans))
+        return;
+
+    /* On a split cursor, just delete the one split. */
+    if (cursor_class == CURSOR_CLASS_SPLIT)
+    {
+        const char *format = _("Cut the split '%s' from the transaction '%s'?");
+        const char *recn_warn = _("You would be removing a reconciled split! "
+                                  "This is not a good idea as it will cause your "
+                                  "reconciled balance to be off.");
+        const char *anchor_error = _("You cannot cut this split.");
+        const char *anchor_split = _("This is the split anchoring this transaction "
+                                     "to the register. You may not remove it from "
+                                     "this register window. You may remove the "
+                                     "entire transaction from this window, or you "
+                                     "may navigate to a register that shows "
+                                     "another side of this same transaction and "
+                                     "remove the split from that register.");
+        char *buf = NULL;
+        const char *memo;
+        const char *desc;
+        char recn;
+
+        if (reg->type != GENERAL_JOURNAL) // no anchoring split
+        {
+            if (split == gnc_split_register_get_current_trans_split (reg, NULL))
+            {
+                dialog = gtk_message_dialog_new (GTK_WINDOW(gsr->window),
+                                                 GTK_DIALOG_MODAL
+                                                 | GTK_DIALOG_DESTROY_WITH_PARENT,
+                                                 GTK_MESSAGE_ERROR,
+                                                 GTK_BUTTONS_OK,
+                                                 "%s", anchor_error);
+                gtk_message_dialog_format_secondary_text (GTK_MESSAGE_DIALOG(dialog),
+                         "%s", anchor_split);
+                gtk_dialog_run (GTK_DIALOG(dialog));
+                gtk_widget_destroy (dialog);
+                return;
+            }
+        }
+        memo = xaccSplitGetMemo (split);
+        memo = (memo && *memo) ? memo : _("(no memo)");
+
+        desc = xaccTransGetDescription (trans);
+        desc = (desc && *desc) ? desc : _("(no description)");
+
+        /* ask for user confirmation before performing permanent damage */
+        buf = g_strdup_printf (format, memo, desc);
+        dialog = gtk_message_dialog_new (GTK_WINDOW(gsr->window),
+                                         GTK_DIALOG_MODAL
+                                         | GTK_DIALOG_DESTROY_WITH_PARENT,
+                                         GTK_MESSAGE_QUESTION,
+                                         GTK_BUTTONS_NONE,
+                                         "%s", buf);
+        g_free (buf);
+        recn = xaccSplitGetReconcile (split);
+        if (recn == YREC || recn == FREC)
+        {
+            gtk_message_dialog_format_secondary_text (GTK_MESSAGE_DIALOG(dialog),
+                    "%s", recn_warn);
+            warning = GNC_PREF_WARN_REG_SPLIT_DEL_RECD;
+        }
+        else
+        {
+            warning = GNC_PREF_WARN_REG_SPLIT_DEL;
+        }
+
+        gtk_dialog_add_button (GTK_DIALOG(dialog),
+                               _("_Cancel"), GTK_RESPONSE_CANCEL);
+        gnc_gtk_dialog_add_button (dialog, _("_Cut Split"),
+                                   "edit-delete", GTK_RESPONSE_ACCEPT);
+        response = gnc_dialog_run (GTK_DIALOG(dialog), warning);
+        gtk_widget_destroy (dialog);
+        if (response != GTK_RESPONSE_ACCEPT)
+            return;
+
+        gnc_split_register_cut_current (reg);
+        return;
+    }
+
+    /* On a transaction cursor with 2 or fewer splits in single or double
+     * mode, we just delete the whole transaction, kerblooie */
+    {
+        const char *title = _("Cut the current transaction?");
+        const char *recn_warn = _("You would be removing a transaction "
+                                  "with reconciled splits! "
+                                  "This is not a good idea as it will cause your "
+                                  "reconciled balance to be off.");
+
+        dialog = gtk_message_dialog_new (GTK_WINDOW(gsr->window),
+                                         GTK_DIALOG_MODAL
+                                         | GTK_DIALOG_DESTROY_WITH_PARENT,
+                                         GTK_MESSAGE_WARNING,
+                                         GTK_BUTTONS_NONE,
+                                         "%s", title);
+        if (xaccTransHasReconciledSplits (trans))
+        {
+            gtk_message_dialog_format_secondary_text (GTK_MESSAGE_DIALOG(dialog),
+                     "%s", recn_warn);
+            warning = GNC_PREF_WARN_REG_TRANS_DEL_RECD;
+        }
+        else
+        {
+            warning = GNC_PREF_WARN_REG_TRANS_DEL;
+        }
+        gtk_dialog_add_button (GTK_DIALOG(dialog),
+                               _("_Cancel"), GTK_RESPONSE_CANCEL);
+        gnc_gtk_dialog_add_button (dialog, _("_Cut Transaction"),
+                                  "edit-delete", GTK_RESPONSE_ACCEPT);
+        response =  gnc_dialog_run (GTK_DIALOG(dialog), warning);
+        gtk_widget_destroy (dialog);
+        if (response != GTK_RESPONSE_ACCEPT)
+            return;
+
+        gnc_split_register_cut_current (reg);
+        return;
+    }
 }
 
 /**
@@ -943,7 +1113,7 @@ is_trans_readonly_and_warn (GtkWindow *parent, Transaction *trans)
                                         "%s", title);
         gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog),
                 "%s", _("The date of this transaction is older than the \"Read-Only Threshold\" set for this book. "
-                        "This setting can be changed in File -> Properties -> Accounts."));
+                        "This setting can be changed in File->Properties->Accounts."));
         gtk_dialog_run(GTK_DIALOG(dialog));
         gtk_widget_destroy(dialog);
         return TRUE;
@@ -1096,7 +1266,7 @@ gsr_default_associate_handler_file (GNCSplitReg *gsr, Transaction *trans, gboole
             gtk_label_set_ellipsize (GTK_LABEL(label), PANGO_ELLIPSIZE_START);
 
             // Set the style context for this label so it can be easily manipulated with css
-            gnc_widget_set_style_context (GTK_WIDGET(label), "gnc-class-highlight");
+            gnc_widget_style_context_add_class (GTK_WIDGET(label), "gnc-class-highlight");
             gtk_file_chooser_set_uri (GTK_FILE_CHOOSER(dialog), file_uri);
 
             g_free (uri_label);
@@ -1197,11 +1367,11 @@ gsr_default_associate_handler_location (GNCSplitReg *gsr, Transaction *trans, gb
     // add a label and set entry text if required
     if (have_uri)
     {
-        label = gtk_label_new (_("Amend URL:"));
+        label = gtk_label_new (_("Amend URL"));
         gtk_entry_set_text (GTK_ENTRY (entry), xaccTransGetAssociation (trans));
     }
     else
-        label = gtk_label_new (_("Enter URL like http://www.gnucash.org:"));
+        label = gtk_label_new (_("Enter URL like https://www.gnucash.org"));
 
     // pack label and entry to content area
     gnc_label_set_alignment (label, 0.0, 0.5);
@@ -1448,19 +1618,22 @@ gsr_default_delete_handler( GNCSplitReg *gsr, gpointer data )
         const char *desc;
         char recn;
 
-        if (split == gnc_split_register_get_current_trans_split (reg, NULL))
+        if (reg->type != GENERAL_JOURNAL) // no anchoring split
         {
-            dialog = gtk_message_dialog_new(GTK_WINDOW(gsr->window),
-                                            GTK_DIALOG_MODAL
-                                            | GTK_DIALOG_DESTROY_WITH_PARENT,
-                                            GTK_MESSAGE_ERROR,
-                                            GTK_BUTTONS_OK,
-                                            "%s", anchor_error);
-            gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog),
-                    "%s", anchor_split);
-            gtk_dialog_run(GTK_DIALOG(dialog));
-            gtk_widget_destroy (dialog);
-            return;
+            if (split == gnc_split_register_get_current_trans_split (reg, NULL))
+            {
+                dialog = gtk_message_dialog_new(GTK_WINDOW(gsr->window),
+                                                GTK_DIALOG_MODAL
+                                                | GTK_DIALOG_DESTROY_WITH_PARENT,
+                                                GTK_MESSAGE_ERROR,
+                                                GTK_BUTTONS_OK,
+                                                "%s", anchor_error);
+                gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog),
+                        "%s", anchor_split);
+                gtk_dialog_run(GTK_DIALOG(dialog));
+                gtk_widget_destroy (dialog);
+                return;
+            }
         }
 
         memo = xaccSplitGetMemo (split);
@@ -1769,6 +1942,14 @@ gnc_split_reg_focus_on_sheet (GNCSplitReg *gsr)
     // Make sure the sheet is the focus
     if (!gtk_widget_has_focus(GTK_WIDGET (sheet)))
         gtk_widget_grab_focus (GTK_WIDGET (sheet));
+}
+
+void
+gnc_split_reg_set_sheet_focus (GNCSplitReg *gsr, gboolean has_focus)
+{
+    GnucashRegister *reg = gsr->reg;
+    GnucashSheet *sheet = gnucash_register_get_sheet (reg);
+    gnucash_sheet_set_has_focus (sheet, has_focus);
 }
 
 void
@@ -2109,7 +2290,7 @@ gnc_split_reg_set_sort_reversed(GNCSplitReg *gsr, gboolean rev, gboolean refresh
         gnc_ledger_display_refresh( gsr->ledger );
 }
 
-static void
+static gboolean
 gnc_split_reg_record (GNCSplitReg *gsr)
 {
     SplitRegister *reg;
@@ -2123,7 +2304,7 @@ gnc_split_reg_record (GNCSplitReg *gsr)
     if (!gnc_split_register_save (reg, TRUE))
     {
         LEAVE("no save");
-        return;
+        return FALSE;
     }
 
     gsr_emit_include_date_signal( gsr, xaccTransGetDate(trans) );
@@ -2132,6 +2313,7 @@ gnc_split_reg_record (GNCSplitReg *gsr)
      * since gui_refresh events should handle this. */
     /* gnc_split_register_redraw (reg); */
     LEAVE(" ");
+    return TRUE;
 }
 
 static gboolean
@@ -2193,9 +2375,22 @@ gnc_split_reg_enter( GNCSplitReg *gsr, gboolean next_transaction )
             }
         }
     }
-
     /* First record the transaction. This will perform a refresh. */
-    gnc_split_reg_record( gsr );
+    if (!gnc_split_reg_record (gsr))
+    {
+        /* we may come here from the transfer cell if we decline to create a
+         * new account, make sure the sheet has the focus if the record is FALSE
+         * which results in no cursor movement. */
+        gnc_split_reg_focus_on_sheet (gsr);
+
+        /* if there are no changes, just enter was pressed, proceed to move
+         * other wise lets not move. */
+        if (gnc_table_current_cursor_changed (sr->table, FALSE))
+        {
+            LEAVE(" ");
+            return;
+        }
+    }
 
     if (!goto_blank && next_transaction)
         gnc_split_register_expand_current_trans (sr, FALSE);
@@ -2237,7 +2432,7 @@ GtkWidget*
 add_summary_label (GtkWidget *summarybar, gboolean pack_start, const char *label_str, GtkWidget *extra)
 {
     GtkWidget *hbox;
-    GtkWidget *label;
+    GtkWidget *text_label, *secondary_label;
 
     hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 2);
     gtk_box_set_homogeneous (GTK_BOX (hbox), FALSE);
@@ -2246,18 +2441,21 @@ add_summary_label (GtkWidget *summarybar, gboolean pack_start, const char *label
     else
         gtk_box_pack_end( GTK_BOX(summarybar), hbox, FALSE, FALSE, 5 );
 
-    label = gtk_label_new( label_str );
-    gnc_label_set_alignment(label, 1.0, 0.5 );
-    gtk_box_pack_start( GTK_BOX(hbox), label, FALSE, FALSE, 0 );
+    text_label = gtk_label_new (label_str);
+    gnc_label_set_alignment (text_label, 1.0, 0.5 );
+    gtk_label_set_ellipsize (GTK_LABEL(text_label), PANGO_ELLIPSIZE_END);
+    gtk_box_pack_start (GTK_BOX(hbox), text_label, FALSE, FALSE, 0);
 
-    label = gtk_label_new( "" );
-    gnc_label_set_alignment(label, 1.0, 0.5 );
-    gtk_box_pack_start( GTK_BOX(hbox), label, FALSE, FALSE, 0 );
+    secondary_label = gtk_label_new ( "" );
+    g_object_set_data (G_OBJECT(secondary_label), "text_label", text_label);
+    g_object_set_data (G_OBJECT(secondary_label), "text_box", hbox);
+    gnc_label_set_alignment (secondary_label, 1.0, 0.5 );
+    gtk_box_pack_start (GTK_BOX(hbox), secondary_label, FALSE, FALSE, 0);
 
     if (extra != NULL)
         gtk_box_pack_start( GTK_BOX(hbox), extra, FALSE, FALSE, 0 );
 
-    return label;
+    return secondary_label;
 }
 
 static void
@@ -2309,10 +2507,10 @@ gsr_create_summary_bar( GNCSplitReg *gsr )
 
     gsr->filter_label = add_summary_label (summarybar, FALSE, "", NULL);
     gsr->sort_arrow = gtk_image_new_from_icon_name ("image-missing", GTK_ICON_SIZE_SMALL_TOOLBAR);
-    gsr->sort_label = add_summary_label (summarybar, FALSE, _("Sort By: "), gsr->sort_arrow);
+    gsr->sort_label = add_summary_label (summarybar, FALSE, _("Sort By:"), gsr->sort_arrow);
 
-    gnc_widget_set_style_context (GTK_WIDGET(gsr->filter_label), "gnc-class-highlight");
-    gnc_widget_set_style_context (GTK_WIDGET(gsr->sort_arrow), "gnc-class-highlight");
+    gnc_widget_style_context_add_class (GTK_WIDGET(gsr->filter_label), "gnc-class-highlight");
+    gnc_widget_style_context_add_class (GTK_WIDGET(gsr->sort_arrow), "gnc-class-highlight");
 
     gsr->summarybar = summarybar;
 
@@ -2421,27 +2619,39 @@ gnc_split_reg_determine_read_only( GNCSplitReg *gsr )
     {
         dialog_args *args;
         char *string = NULL;
-        switch (gnc_split_reg_get_placeholder(gsr))
+        reg = gnc_ledger_display_get_split_register( gsr->ledger );
+        if(reg->mismatched_commodities)
         {
-        case PLACEHOLDER_NONE:
-            /* stay as false. */
-            return;
+            string = _("The transactions of this account may not be edited "
+                       "because its subaccounts have mismatched commodities "
+                       "or currencies.\n"
+                       "You need to open each account individually to edit "
+                       "transactions.");
+        }
+        else
+        {
+            switch (gnc_split_reg_get_placeholder(gsr))
+            {
+            case PLACEHOLDER_NONE:
+                /* stay as false. */
+                return;
 
-        case PLACEHOLDER_THIS:
-            string = _("This account may not be edited. If you want "
-                             "to edit transactions in this register, please "
-                             "open the account options and turn off the "
-                             "placeholder checkbox.");
-            break;
+            case PLACEHOLDER_THIS:
+                string = _("The transactions of this account may not be edited.\n"
+                           "If you want to edit transactions in this register, "
+                           "please open the account options and turn off the "
+                           "placeholder checkbox.");
+                break;
 
-        default:
-            string = _("One of the sub-accounts selected may not be "
-                             "edited. If you want to edit transactions in "
-                             "this register, please open the sub-account "
-                             "options and turn off the placeholder checkbox. "
-                             "You may also open an individual account instead "
-                             "of a set of accounts.");
-            break;
+            default:
+                string = _("The transactions in one of the selected "
+                           "sub-accounts may not be edited.\n"
+                           "If you want to edit transactions in this register, please open "
+                           "the sub-account options and turn off the placeholder checkbox.\n"
+                           "You may also open an individual account instead "
+                           "of a set of accounts.");
+                break;
+            }
         }
         gsr->read_only = TRUE;
         /* Put up a warning dialog */

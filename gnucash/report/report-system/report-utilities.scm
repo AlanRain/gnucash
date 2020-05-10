@@ -19,6 +19,7 @@
 
 (use-modules (srfi srfi-13))
 (use-modules (ice-9 format))
+(use-modules (ice-9 match))
 
 (define (list-ref-safe list elt)
   (and (> (length list) elt)
@@ -129,11 +130,12 @@ construct gnc:make-gnc-monetary and use gnc:monetary->string instead.")
 ;; 'accounts', excluding the 'exclude-commodity'.
 (define (gnc:accounts-get-commodities accounts exclude-commodity)
   (delete exclude-commodity
-	  (delete-duplicates
-	   (sort (map xaccAccountGetCommodity accounts)
-		 (lambda (a b) 
-		   (string<? (or (gnc-commodity-get-mnemonic a) "")
-			     (or (gnc-commodity-get-mnemonic b) "")))))))
+	  (sort-and-delete-duplicates
+           (map xaccAccountGetCommodity accounts)
+           (lambda (a b)
+             (string<? (gnc-commodity-get-unique-name a)
+                       (gnc-commodity-get-unique-name b)))
+           gnc-commodity-equiv)))
 
 
 ;; Returns the depth of the current account hierarchy, that is, the
@@ -145,8 +147,15 @@ construct gnc:make-gnc-monetary and use gnc:monetary->string instead.")
 
 ;; Get all children of this list of accounts.
 (define (gnc:acccounts-get-all-subaccounts accountlist)
+  (issue-deprecation-warning "gnc:acccounts-get-all-subaccounts is unused.")
   (append-map gnc-account-get-descendants-sorted
               accountlist))
+
+;; Return accountslist *and* their descendant accounts
+(define (gnc:accounts-and-all-descendants accountslist)
+  (sort-and-delete-duplicates
+   (apply append accountslist (map gnc-account-get-descendants accountslist))
+   gnc:account-path-less-p equal?))
 
 ;;; Here's a statistics collector...  Collects max, min, total, and makes
 ;;; it easy to get at the mean.
@@ -264,6 +273,8 @@ construct gnc:make-gnc-monetary and use gnc:monetary->string instead.")
 ;;
 ;; New Example: But now USD is a <gnc:commodity*> and 123.4 a
 ;; <gnc:numeric>, so there is no simple example anymore.
+;
+;; Note amounts are rounded to the commodity's SCU.
 ;;
 ;; The functions:
 ;;   'add <commodity> <amount>: Add the given amount to the 
@@ -283,36 +294,33 @@ construct gnc:make-gnc-monetary and use gnc:monetary->string instead.")
 ;;       (even the fact that any commodity showed up at all).
 ;;   'getpair <commodity> signreverse?: Returns the two-element-list
 ;;       with the <commodity> and its corresponding balance. If
-;;       <commodity> doesn't exist, the balance will be
-;;       (gnc-numeric-zero). If signreverse? is true, the result's
-;;       sign will be reversed.
-;;   (internal) 'list #f #f: get the association list of 
-;;       commodity->numeric-collector
+;;       <commodity> doesn't exist, the balance will be 0. If
+;;       signreverse? is true, the result's sign will be reversed.
+;;   'getmonetary <commodity> signreverse?: Returns a gnc-monetary
+;;       of the <commodity> and its corresponding balance. If
+;;       <commodity> doesn't exist, the balance will be 0. If
+;;       signreverse? is true, the result's sign will be reversed.
+;;   (internal) 'list #f #f: get the list of
+;;       (cons commodity numeric-collector)
 
 (define (gnc:make-commodity-collector)
-  (let 
-      ;; the association list of (commodity -> value-collector) pairs.
-      ((commoditylist '()))
+  ;; the association list of (commodity . value-collector) pairs.
+  (let ((commoditylist '()))
     
-    ;; helper function to add a commodity->value pair to our list. 
+    ;; helper function to add a (commodity . value) pair to our list.
     ;; If no pair with this commodity exists, we will create one.
     (define (add-commodity-value commodity value)
-      ;; lookup the corresponding pair
       (let ((pair (assoc commodity commoditylist))
             (rvalue (gnc-numeric-convert
                      value
                      (gnc-commodity-get-fraction commodity) GNC-RND-ROUND)))
-	(if (not pair)
-	    (begin
-	      ;; create a new pair, using the gnc:value-collector
-	      (set! pair (list commodity (gnc:make-value-collector)))
-	      ;; and add it to the alist
-	      (set! commoditylist (cons pair commoditylist))))
-	;; add the value
+	(unless pair
+	  (set! pair (list commodity (gnc:make-value-collector)))
+	  (set! commoditylist (cons pair commoditylist)))
 	((cadr pair) 'add rvalue)))
     
     ;; helper function to walk an association list, adding each
-    ;; (commodity -> collector) pair to our list at the appropriate 
+    ;; (commodity . collector) pair to our list at the appropriate
     ;; place
     (define (add-commodity-clist clist)
       (cond ((null? clist) '())
@@ -331,25 +339,24 @@ construct gnc:make-gnc-monetary and use gnc:monetary->string instead.")
     ;; helper function walk the association list doing a callback on
     ;; each key-value pair.
     (define (process-commodity-list fn clist)
-      (map 
-       (lambda (pair) (fn (car pair) 
-			  ((cadr pair) 'total #f)))
+      (map
+       (lambda (pair)
+         (fn (car pair) ((cadr pair) 'total #f)))
        clist))
 
-    ;; helper function which is given a commodity and returns, if
-    ;; existing, a list (gnc:commodity gnc:numeric).
+    ;; helper function which is given a commodity and returns a list
+    ;; (list gnc:commodity number).
     (define (getpair c sign?)
       (let* ((pair (assoc c commoditylist))
-             (total (and pair ((cadr pair) 'total #f))))
-	(list c (if pair (if sign? (- total) total) 0))))
+             (total (if pair ((cadr pair) 'total #f) 0)))
+	(list c (if sign? (- total) total))))
 
-    ;; helper function which is given a commodity and returns, if
-    ;; existing, a <gnc:monetary> value.
+    ;; helper function which is given a commodity and returns a
+    ;; <gnc:monetary> value, whose amount may be 0.
     (define (getmonetary c sign?)
       (let* ((pair (assoc c commoditylist))
-             (total (and pair ((cadr pair) 'total #f))))
-	(gnc:make-gnc-monetary
-         c (if pair (if sign? (- total) total) 0))))
+             (total (if pair ((cadr pair) 'total #f) 0)))
+	(gnc:make-gnc-monetary c (if sign? (- total) total))))
     
     ;; Dispatch function
     (lambda (action commodity amount)
@@ -380,9 +387,26 @@ construct gnc:make-gnc-monetary and use gnc:monetary->string instead.")
 
 ;; Returns zero if all entries in this collector are zero.
 (define (gnc-commodity-collector-allzero? collector)
-  (every zero?
-         (map gnc:gnc-monetary-amount
-              (collector 'format gnc:make-gnc-monetary #f))))
+  (every zero? (map cdr (collector 'format cons #f))))
+
+;; (gnc:collector+ collectors ...) equiv to (+ collectors ...) and
+;; outputs: a collector
+(define (gnc:collector+ . collectors)
+  (let ((res (gnc:make-commodity-collector)))
+    (for-each (lambda (coll) (res 'merge coll #f)) collectors)
+    res))
+
+;; (gnc:collectors- collectors ...) equiv to (- collectors ...), can
+;; also negate single-argument collector. outputs collector
+(define gnc:collector-
+  (case-lambda
+    (() (error "gnc:collector- needs at least 1 collector argument"))
+    ((coll) (gnc:collector- (gnc:make-commodity-collector) coll))
+    ((coll . rest)
+     (let ((res (gnc:make-commodity-collector)))
+       (res 'merge coll #f)
+       (res 'minusmerge (apply gnc:collector+ rest) #f)
+       res))))
 
 ;; add any number of gnc-monetary objects into a commodity-collector
 ;; usage: (gnc:monetaries-add monetary1 monetary2 ...)
@@ -399,11 +423,10 @@ construct gnc:make-gnc-monetary and use gnc:monetary->string instead.")
 ;; usage: (gnc:monetaries-add monetary1 monetary2 ...)
 ;; output: a monetary object
 (define (gnc:monetary+ . monetaries)
-  (let* ((coll (apply gnc:monetaries-add monetaries))
-         (list-of-monetaries (coll 'format gnc:make-gnc-monetary #f)))
-    (if (null? (cdr list-of-monetaries))
-        (car list-of-monetaries)
-        (throw "gnc:monetary+ expects 1 currency " (gnc:strify monetaries)))))
+  (let ((coll (apply gnc:monetaries-add monetaries)))
+    (match (coll 'format gnc:make-gnc-monetary #f)
+      ((mon) mon)
+      (_ (throw "gnc:monetary+ expects 1 currency " (gnc:strify monetaries))))))
 
 ;; get the account balance at the specified date. if include-children?
 ;; is true, the balances of all children (not just direct children)
@@ -443,53 +466,70 @@ flawed. see report-utilities.scm. please update reports.")
 (define* (gnc:account-get-balances-at-dates
           account dates-list #:key (split->amount xaccSplitGetAmount))
   (define (amount->monetary bal)
-    (gnc:make-gnc-monetary (xaccAccountGetCommodity account) bal))
-  (let loop ((splits (xaccAccountGetSplitList account))
-             (dates-list (stable-sort! dates-list <))
-             (currentbal 0)
-             (lastbal 0)
-             (balancelist '()))
-    (cond
+    (gnc:make-gnc-monetary (xaccAccountGetCommodity account) (or bal 0)))
+  (define balance 0)
+  (map amount->monetary
+       (gnc:account-accumulate-at-dates
+        account dates-list #:split->elt
+        (lambda (s)
+          (if s (set! balance (+ balance (or (split->amount s) 0))))
+          balance))))
 
-     ;; end of dates. job done!
-     ((null? dates-list)
-      (map amount->monetary (reverse balancelist)))
 
-     ;; end of splits, but still has dates. pad with last-bal
-     ;; until end of dates.
-     ((null? splits)
-      (loop '()
-            (cdr dates-list)
-            currentbal
-            lastbal
-            (cons lastbal balancelist)))
+;; this function will scan through account splitlist, building a list
+;; of split->elt results along the way at dates specified in dates.
+;; in: acc   - account
+;;     dates - a list of time64 -- it will be sorted
+;;     nosplit->elt - if report-dates occur *before* earliest split, the
+;;                    result list will be padded with this value
+;;     split->date - an unary lambda. result to compare with dates list.
+;;     split->elt - an unary lambda. it will be called successfully for each
+;;                  split in the account until the last date. the result
+;;                  will be accumulated onto the resulting list. the default
+;;                  xaccSplitGetBalance makes it similar to
+;;                  gnc:account-get-balances-at-dates.
+;; out: (list elt0 elt1 ...), each entry is the result of split->elt
+;;      or nosplit->elt
+(define* (gnc:account-accumulate-at-dates
+          acc dates #:key
+          (nosplit->elt #f)
+          (split->date #f)
+          (split->elt xaccSplitGetBalance))
+  (define to-date (or split->date (compose xaccTransGetDate xaccSplitGetParent)))
+  (define (less? a b) (< (to-date a) (to-date b)))
 
-     (else
-      (let* ((this (car splits))
-             (rest (cdr splits))
-             (currentbal (+ (or (split->amount this) 0) currentbal))
-             (next (and (pair? rest) (car rest))))
+  (let lp ((splits (if split->date
+                       (stable-sort! (xaccAccountGetSplitList acc) less?)
+                       (xaccAccountGetSplitList acc)))
+           (dates (sort dates <))
+           (result '())
+           (last-result nosplit->elt))
+    (match dates
 
-        (cond
-         ;; the next split is still before date
-         ((and next (< (xaccTransGetDate (xaccSplitGetParent next)) (car dates-list)))
-          (loop rest dates-list currentbal lastbal balancelist))
+      ;; end of dates. job done!
+      (() (reverse result))
 
-         ;; this split after date, add previous bal to balancelist
-         ((< (car dates-list) (xaccTransGetDate (xaccSplitGetParent this)))
-          (loop splits
-                (cdr dates-list)
-                lastbal
-                lastbal
-                (cons lastbal balancelist)))
+      ((date . rest)
+       (define (before-date? s) (<= (to-date s) date))
+       (define (after-date? s) (< date (to-date s)))
+       (match splits
 
-         ;; this split before date, next split after date, or end.
-         (else
-          (loop rest
-                (cdr dates-list)
-                currentbal
-                currentbal
-                (cons currentbal balancelist)))))))))
+         ;; end of splits, but still has dates. pad with last-result
+         ;; until end of dates.
+         (() (lp '() rest (cons last-result result) last-result))
+
+         ;; the next split is still before date.
+         ((and (_ (? before-date?) . _) (head . tail))
+          (lp tail dates result (split->elt head)))
+
+         ;; head split after date, accumulate previous result
+         (((? after-date?) . tail)
+          (lp splits rest (cons last-result result) last-result))
+
+         ;; head split before date, next split after date, or end.
+         ((head . tail)
+          (let ((head-result (split->elt head)))
+            (lp tail rest (cons head-result result) head-result))))))))
 
 ;; This works similar as above but returns a commodity-collector, 
 ;; thus takes care of children accounts with different currencies.
@@ -981,14 +1021,22 @@ flawed. see report-utilities.scm. please update reports.")
 ;;   budget - budget to use
 ;;   children - list of children
 ;;   period - budget period to use
+;;   currency - currency to use to accumulate the balances
 ;;
 ;; Return value:
 ;;   budget value to use for account for specified period.
-(define (budget-account-sum budget children period)
-  (apply + (map
-            (lambda (child)
-              (gnc:get-account-period-rolledup-budget-value budget child period))
-            children)))
+(define (budget-account-sum budget children period currency)
+  (let ((pricedb (gnc-pricedb-get-db (gnc-get-current-book)))
+        (start (gnc-budget-get-period-start-date budget period)))
+    (apply + (map
+              (lambda (child)
+                (gnc-pricedb-convert-balance-nearest-price-t64
+                  pricedb
+                  (gnc:get-account-period-rolledup-budget-value budget child period)
+                  (xaccAccountGetCommodity child)
+                  currency
+                  start))
+              children))))
 
 ;; Calculate the value to use for the budget of an account for a specific period.
 ;; - If the account has a budget value set for the period, use it
@@ -1004,10 +1052,11 @@ flawed. see report-utilities.scm. please update reports.")
 ;;   sum of all budgets for list of children for specified period.
 (define (gnc:get-account-period-rolledup-budget-value budget acct period)
   (let* ((bgt-set? (gnc-budget-is-account-period-value-set budget acct period))
-         (children (gnc-account-get-children acct)))
+         (children (gnc-account-get-children acct))
+         (currency (xaccAccountGetCommodity acct)))
     (cond
      (bgt-set? (gnc-budget-get-account-period-value budget acct period))
-     ((not (null? children)) (budget-account-sum budget children period))
+     ((not (null? children)) (budget-account-sum budget children period currency))
      (else 0))))
 
 ;; Sums rolled-up budget values for a single account from start-period (inclusive) to
@@ -1059,6 +1108,86 @@ flawed. see report-utilities.scm. please update reports.")
        (total 'merge (cadr account-balance) #f))
      account-balances)
     total))
+
+(define (gnc:multiline-to-html-text str)
+  ;; simple function - splits string containing #\newline into
+  ;; substrings, and convert to a gnc:make-html-text construct which
+  ;; adds gnc:html-markup-br after each substring.
+  (let loop ((list-of-substrings (string-split str #\newline))
+             (result '()))
+    (if (null? list-of-substrings)
+        (apply gnc:make-html-text (if (null? result) '() (reverse (cdr result))))
+        (loop (cdr list-of-substrings)
+              (cons* (gnc:html-markup-br) (car list-of-substrings) result)))))
+
+;; ***************************************************************************
+;; Business Functions
+
+;; create a stepped list, then add a date in the infinite future for
+;; the "current" bucket
+(define (make-extended-interval-list to-date num-buckets)
+  (let lp ((begindate to-date) (num-buckets num-buckets))
+    (if (zero? num-buckets)
+        (append (gnc:make-date-list begindate to-date ThirtyDayDelta) (list +inf.0))
+        (lp (decdate begindate ThirtyDayDelta) (1- num-buckets)))))
+
+;; Outputs: aging list of numbers
+(define-public (gnc:owner-splits->aging-list splits num-buckets
+                                             to-date date-type receivable?)
+  (gnc:msg "processing " (qof-print-date to-date) " date-type " date-type
+           "receivable? " receivable?)
+  (let ((bucket-dates (make-extended-interval-list to-date (- num-buckets 3)))
+        (buckets (make-vector num-buckets 0)))
+    (define (addbucket! idx amt)
+      (vector-set! buckets idx (+ amt (vector-ref buckets idx))))
+    (let lp ((splits splits))
+      (cond
+       ((null? splits)
+        (vector->list buckets))
+
+       ;; next split is an invoice posting split. add its balance to
+       ;; bucket
+       ((eqv? (xaccTransGetTxnType (xaccSplitGetParent (car splits)))
+              TXN-TYPE-INVOICE)
+        (let* ((invoice (gncInvoiceGetInvoiceFromTxn
+                         (xaccSplitGetParent (car splits))))
+               (lot (gncInvoiceGetPostedLot invoice))
+               (bal (gnc-lot-get-balance lot))
+               (bal (if receivable? bal (- bal)))
+               (date (if (eq? date-type 'postdate)
+                         (gncInvoiceGetDatePosted invoice)
+                         (gncInvoiceGetDateDue invoice))))
+          (gnc:msg "next " (gnc:strify (car splits))
+                   " invoice " (gnc:strify invoice) " bal " bal)
+          (let loop ((idx 0) (bucket-dates bucket-dates))
+            (if (< date (car bucket-dates))
+                (addbucket! idx bal)
+                (loop (1+ idx) (cdr bucket-dates))))
+          (lp (cdr splits))))
+
+       ;; next split is a payment. analyse its sister APAR splits. any
+       ;; split whose lot has no invoice is an overpayment.
+       ((eqv? (xaccTransGetTxnType (xaccSplitGetParent (car splits)))
+              TXN-TYPE-PAYMENT)
+        (let* ((txn (xaccSplitGetParent (car splits)))
+               (splitlist (xaccTransGetAPARAcctSplitList txn #f))
+               (overpayment
+                (fold
+                 (lambda (a b)
+                   (if (null? (gncInvoiceGetInvoiceFromLot (xaccSplitGetLot a)))
+                       (- b (gnc-lot-get-balance (xaccSplitGetLot a)))
+                       b))
+                 0 splitlist)))
+          (gnc:msg "next " (gnc:strify (car splits))
+                   " overpayment " overpayment)
+          (addbucket! (1- num-buckets) (if receivable? (- overpayment) overpayment))
+          (lp (cdr splits))))
+
+       ;; not invoice/prepayment. regular or payment split.
+       (else
+        (gnc:msg "next " (gnc:strify (car splits)) " skipped")
+        (lp (cdr splits)))))))
+
 ;; ***************************************************************************
 
 ;; Adds "file:///" to the beginning of a URL if it doesn't already exist
@@ -1081,33 +1210,66 @@ flawed. see report-utilities.scm. please update reports.")
               (xaccAccountGetName (xaccSplitGetAccount spl))
               (gnc:monetary->string
                (gnc:make-gnc-monetary
-                (xaccTransGetCurrency txn)
-                (xaccSplitGetValue spl)))
-              (gnc:monetary->string
-               (gnc:make-gnc-monetary
                 (xaccAccountGetCommodity
                  (xaccSplitGetAccount spl))
-                (xaccSplitGetAmount spl))))))
+                (xaccSplitGetAmount spl)))
+              (gnc:monetary->string
+               (gnc:make-gnc-monetary
+                (xaccTransGetCurrency txn)
+                (xaccSplitGetValue spl))))))
   (define (trans->str txn)
-    (format #f "Txn<d:~a>" (qof-print-date (xaccTransGetDate txn))))
+    (format #f "Txn<d:~a,desc:~a>"
+            (qof-print-date (xaccTransGetDate txn))
+            (xaccTransGetDescription txn)))
   (define (account->str acc)
     (format #f "Acc<~a>" (xaccAccountGetName acc)))
   (define (monetary-collector->str coll)
-    (format #f "Mon-coll<~a>"
+    (format #f "coll<~a>"
             (map gnc:strify (coll 'format gnc:make-gnc-monetary #f))))
   (define (value-collector->str coll)
-    (format #f "Val-coll<~a>"
-            (map gnc:strify (coll 'total gnc:make-gnc-monetary))))
+    (format #f "coll<~a>" (coll 'total #f)))
   (define (procedure->str proc)
     (format #f "Proc<~a>"
             (or (procedure-name proc) "unk")))
   (define (monetary->string mon)
-    (format #f "Mon<~a>"
+    (format #f "[~a]"
             (gnc:monetary->string mon)))
+  (define (owner->str owner)
+    (format #f "[~a:~a]"
+            (gncOwnerGetTypeString owner)
+            (gncOwnerGetName owner)))
+  (define (invoice->str inv)
+    (format #f "~a<Post:~a,Owner:~a,Notes:~a,Total:~a>"
+            (gncInvoiceGetTypeString inv)
+            (qof-print-date (gncInvoiceGetDatePosted inv))
+            (gncOwnerGetName (gncInvoiceGetOwner inv))
+            (gncInvoiceGetNotes inv)
+            (monetary->string (gnc:make-gnc-monetary
+                               (gncInvoiceGetCurrency inv)
+                               (gncInvoiceGetTotal inv)))))
+  (define (lot->str lot)
+    (format #f "Lot<Acc:~a,Title:~a,Notes:~a,Balance:~a,NSplits:~a>"
+            (xaccAccountGetName (gnc-lot-get-account lot))
+            (gnc-lot-get-title lot)
+            (gnc-lot-get-notes lot)
+            (gnc-lot-get-balance lot)
+            (gnc-lot-count-splits lot)))
+  (define (record->str rec)
+    (let ((rtd (record-type-descriptor rec)))
+      (define (fld->str fld)
+        (format #f "~a=~a" fld (gnc:strify ((record-accessor rtd fld) rec))))
+      (format #f "Rec:~a{~a}"
+              (record-type-name rtd)
+              (string-join (map fld->str (record-type-fields rtd)) ", "))))
+  (define (hash-table->str hash)
+    (string-append
+     "Hash(" (string-join
+              (hash-map->list (lambda (k v) (format #f "~a=~a" k v)) hash) ",")
+     ")"))
   (define (try proc)
-    ;; Try proc with d as a parameter, catching 'wrong-type-arg
-    ;; exceptions to return #f to the (or) evaluator below.
-    (catch 'wrong-type-arg
+    ;; Try proc with d as a parameter, catching exceptions to return
+    ;; #f to the (or) evaluator below.
+    (catch #t
       (lambda () (proc d))
       (const #f)))
   (or (and (boolean? d) (if d "#t" "#f"))
@@ -1118,20 +1280,29 @@ flawed. see report-utilities.scm. please update reports.")
                       "(list "
                       (string-join (map gnc:strify d) " ")
                       ")"))
+      (and (vector? d) (string-append
+                        "(vector "
+                        (string-join (map gnc:strify (vector->list d)) " ")
+                        ")"))
       (and (pair? d) (format #f "(~a . ~a)"
                              (gnc:strify (car d))
                              (if (eq? (car d) 'absolute)
                                  (qof-print-date (cdr d))
                                  (gnc:strify (cdr d)))))
+      (try monetary-collector->str)
+      (try value-collector->str)
       (try procedure->str)
       (try gnc-commodity-get-mnemonic)
       (try account->str)
       (try split->str)
       (try trans->str)
-      (try monetary-collector->str)
-      (try value-collector->str)
       (try monetary->string)
       (try gnc-budget-get-name)
+      (try owner->str)
+      (try invoice->str)
+      (try lot->str)
+      (try hash-table->str)
+      (try record->str)
       (object->string d)))
 
 (define (pair->num pair)
@@ -1155,3 +1326,103 @@ flawed. see report-utilities.scm. please update reports.")
       (display (map gnc:strify args))
       (newline)
       (last args))))
+
+;; utility function for testing. dumps the whole book contents to
+;; console.
+(define (gnc:dump-book)
+  (display "\n(gnc:dump-book)\n")
+  (for-each
+   (lambda (acc)
+     (format #t "\nAccount: <~a> Comm<~a> Type<~a>\n"
+             (gnc-account-get-full-name acc)
+             (gnc-commodity-get-mnemonic
+              (xaccAccountGetCommodity acc))
+             (xaccAccountGetTypeStr
+              (xaccAccountGetType acc)))
+     (for-each
+      (lambda (s)
+        (let ((txn (xaccSplitGetParent s)))
+          (format #t "~a Split: ~a Amt<~a> Val<~a> Desc<~a> Memo<~a>\n"
+                  (xaccSplitGetReconcile s)
+                  (qof-print-date (xaccTransGetDate txn))
+                  (gnc:monetary->string
+                   (gnc:make-gnc-monetary
+                    (xaccAccountGetCommodity acc)
+                    (xaccSplitGetAmount s)))
+                  (gnc:monetary->string
+                   (gnc:make-gnc-monetary
+                    (xaccTransGetCurrency txn)
+                    (xaccSplitGetValue s)))
+                  (xaccTransGetDescription txn)
+                  (xaccSplitGetMemo s))))
+      (xaccAccountGetSplitList acc))
+     (format #t "Balance: ~a Cleared: ~a Reconciled: ~a\n"
+             (gnc:monetary->string
+              (gnc:make-gnc-monetary
+               (xaccAccountGetCommodity acc)
+               (xaccAccountGetBalance acc)))
+             (gnc:monetary->string
+              (gnc:make-gnc-monetary
+               (xaccAccountGetCommodity acc)
+               (xaccAccountGetClearedBalance acc)))
+             (gnc:monetary->string
+              (gnc:make-gnc-monetary
+               (xaccAccountGetCommodity acc)
+               (xaccAccountGetReconciledBalance acc)))))
+   (gnc-account-get-descendants-sorted
+    (gnc-get-current-root-account))))
+
+;; dump all invoices posted into an AP/AR account
+(define (gnc:dump-invoices)
+  (display "\n(gnc:dump-invoices)\n")
+  (let* ((acc-APAR (filter (compose xaccAccountIsAPARType xaccAccountGetType)
+                           (gnc-account-get-descendants-sorted
+                            (gnc-get-current-root-account))))
+         (inv-txns (filter (lambda (t) (eqv? (xaccTransGetTxnType t) TXN-TYPE-INVOICE))
+                           (map xaccSplitGetParent
+                                (append-map xaccAccountGetSplitList acc-APAR))))
+         (invoices (map gncInvoiceGetInvoiceFromTxn inv-txns)))
+    (define (maybe-date time64)         ;handle INT-MAX differently
+      (if (= 9223372036854775807 time64) "?" (qof-print-date time64)))
+    (define (maybe-trunc str)
+      (if (> (string-length str) 20) (string-append (substring str 0 17) "...") str))
+    (define (inv-amt->string inv amt)
+      (gnc:monetary->string
+       (gnc:make-gnc-monetary
+        (gncInvoiceGetCurrency inv) amt)))
+    (for-each
+     (lambda (inv)
+       (format #t "Invoice: ID<~a> Owner<~a> Account<~a>\n"
+               (gncInvoiceGetID inv)
+               (gncOwnerGetName (gncInvoiceGetOwner inv))
+               (xaccAccountGetName (gncInvoiceGetPostedAcc inv)))
+       (format #t "   Date: Open<~a> Post<~a> Due<~a>\n"
+               (maybe-date (gncInvoiceGetDateOpened inv))
+               (maybe-date (gncInvoiceGetDatePosted inv))
+               (maybe-date (gncInvoiceGetDateDue inv)))
+       (for-each
+        (lambda (entry)
+          (format #t "  Entry: Date<~a> Desc<~a> Action<~a> Notes<~a> Qty<~a>\n"
+                  (maybe-date (gncEntryGetDate entry))
+                  (maybe-trunc (gncEntryGetDescription entry))
+                  (maybe-trunc (gncEntryGetAction entry))
+                  (maybe-trunc (gncEntryGetNotes entry))
+                  (gncEntryGetQuantity entry)))
+        (gncInvoiceGetEntries inv))
+       (format #t " Totals: Total<~a> TotalSubtotal<~a> TotalTax<~a>\n"
+               (inv-amt->string inv (gncInvoiceGetTotal inv))
+               (inv-amt->string inv (gncInvoiceGetTotalSubtotal inv))
+               (inv-amt->string inv (gncInvoiceGetTotalTax inv)))
+       (newline))
+     invoices)))
+
+(define (gnc:dump-lot lot)
+  (display "gnc:dump-lot: ")
+  (display (gnc:strify lot))
+  (newline)
+  (for-each
+   (lambda (s)
+     (display "Lot-split: ")
+     (display (gnc:strify s))
+     (newline))
+   (gnc-lot-get-split-list lot)))

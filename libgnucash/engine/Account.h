@@ -558,6 +558,9 @@ gnc_numeric xaccAccountGetProjectedMinimumBalance (const Account *account);
 gnc_numeric xaccAccountGetBalanceAsOfDate (Account *account,
         time64 date);
 
+/** Get the reconciled balance of the account as of the date specified */
+gnc_numeric xaccAccountGetReconciledBalanceAsOfDate (Account *account, time64 date);
+
 /* These two functions convert a given balance from one commodity to
    another.  The account argument is only used to get the Book, and
    may have nothing to do with the supplied balance.  Likewise, the
@@ -595,12 +598,19 @@ gnc_numeric xaccAccountGetProjectedMinimumBalanceInCurrency (
     const Account *account, const gnc_commodity *report_commodity,
     gboolean include_children);
 
+/* This function gets the balance as of the given date, ignoring
+   closing entries, in the desired commodity. */
+gnc_numeric xaccAccountGetNoclosingBalanceAsOfDateInCurrency(
+    Account *acc, time64 date, gnc_commodity *report_commodity,
+    gboolean include_children);
 /* This function gets the balance as of the given date in the desired
    commodity. */
 gnc_numeric xaccAccountGetBalanceAsOfDateInCurrency(
     Account *account, time64 date, gnc_commodity *report_commodity,
     gboolean include_children);
 
+gnc_numeric xaccAccountGetNoclosingBalanceChangeForPeriod (
+    Account *acc, time64 date1, time64 date2, gboolean recurse);
 gnc_numeric xaccAccountGetBalanceChangeForPeriod (
     Account *acc, time64 date1, time64 date2, gboolean recurse);
 
@@ -1504,6 +1514,7 @@ const char * dxaccAccountGetQuoteTZ (const Account *account);
 #define ACCOUNT_SORT_REVERSED_ "sort-reversed"
 #define ACCOUNT_NOTES_		"notes"
 #define ACCOUNT_BALANCE_	"balance"
+#define ACCOUNT_NOCLOSING_	"noclosing"
 #define ACCOUNT_CLEARED_	"cleared"
 #define ACCOUNT_RECONCILED_	"reconciled"
 #define ACCOUNT_PRESENT_	"present"

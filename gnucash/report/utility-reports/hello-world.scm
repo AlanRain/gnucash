@@ -65,22 +65,18 @@
      (gnc:make-multichoice-option
       (N_ "Hello, World!") (N_ "Multi Choice Option")
       "b" (N_ "This is a multi choice option.") 'third
-      (list (list->vector
-             (list 'first
-                   (N_ "First Option")
-                   (N_ "Help for first option.")))
-            (list->vector
-             (list 'second
-                   (N_ "Second Option")
-                   (N_ "Help for second option.")))
-            (list->vector
-             (list 'third
-                   (N_ "Third Option")
-                   (N_ "Help for third option.")))
-            (list->vector
-             (list 'fourth
-                   (N_ "Fourth Options")
-                   (N_ "The fourth option rules!"))))))
+      (list (vector 'first
+                    (N_ "First Option")
+                    (N_ "Help for first option."))
+            (vector 'second
+                    (N_ "Second Option")
+                    (N_ "Help for second option."))
+            (vector 'third
+                    (N_ "Third Option")
+                    (N_ "Help for third option."))
+            (vector 'fourth
+                    (N_ "Fourth Options")
+                    (N_ "The fourth option rules!")))))
     
     ;; This is a string option. Users can type anything they want
     ;; as a value. The default value is "Hello, World". This is
@@ -157,13 +153,6 @@
       (list #xf6 #xff #xdb #xff)
       255
       #f))
-    (add-option
-     (gnc:make-color-option
-      (N_ "Hello, World!") (N_ "Text Color")
-      "f" (N_ "This is a color option.")
-      (list #x00 #x00 #x00 #xff)
-      255
-      #f))
     
     ;; This is an account list option. The user can select one
     ;; or (possibly) more accounts from the list of accounts
@@ -196,19 +185,16 @@
      (gnc:make-list-option
       (N_ "Hello Again") (N_ "A list option")
       "h" (N_ "This is a list option.")
-      (list 'good)
-      (list (list->vector
-             (list 'good
-                   (N_ "The Good")
-                   (N_ "Good option.")))
-            (list->vector
-             (list 'bad
-                   (N_ "The Bad")
-                   (N_ "Bad option.")))
-            (list->vector
-             (list 'ugly
-                   (N_ "The Ugly")
-                   (N_ "Ugly option."))))))
+      '(good)
+      (list (vector 'good
+                    (N_ "The Good")
+                    (N_ "Good option."))
+            (vector 'bad
+                    (N_ "The Bad")
+                    (N_ "Bad option."))
+            (vector 'ugly
+                    (N_ "The Ugly")
+                    (N_ "Ugly option.")))))
     
     ;; This option is for testing. When true, the report generates
     ;; an exception.
@@ -254,7 +240,6 @@ option like this.")
                          (op-value "Hello, World!" "Combo Date Option")))
         (num-val      (op-value "Hello, World!" "Number Option"))
         (bg-color-op  (get-op   "Hello, World!" "Background Color"))
-        (txt-color-op (get-op   "Hello, World!" "Text Color"))
         (accounts     (op-value "Hello Again"   "An account list option"))
         (list-val     (op-value "Hello Again"   "A list option"))
         (crash-val    (op-value "Testing"       "Crash the report"))
@@ -268,12 +253,11 @@ option like this.")
     ;; these are samples of different date options. for a simple
     ;; date with day, month, and year but no time you should use
     ;; qof-print-date
-    (let ((time-string (strftime "%X" (gnc-localtime (current-time))))
-          (date-string (strftime "%x" (gnc-localtime date-val)))
-          (date-string2 (strftime "%x %X" (gnc-localtime date2-val)))
-          (rel-date-string (strftime "%x" (gnc-localtime rel-date-val)))
-          (combo-date-string
-           (strftime "%x" (gnc-localtime combo-date-val))))
+    (let ((time-string (gnc-print-time64 (current-time) "%X"))
+          (date-string (gnc-print-time64 date-val "%x"))
+          (date-string2 (gnc-print-time64 date2-val "%x %X"))
+          (rel-date-string (gnc-print-time64 rel-date-val "%x"))
+          (combo-date-string (gnc-print-time64 combo-date-val "%x")))
 
       ;; Here's where we fill the report document with content.  We
       ;; do this by adding 'html objects' such as text, tables, and
@@ -312,8 +296,7 @@ option like this.")
       
       (gnc:html-document-set-style!
        document "body" 
-       'attribute (list "bgcolor" (gnc:color-option->html bg-color-op))
-       'font-color (gnc:color-option->html txt-color-op))
+       'attribute (list "bgcolor" (gnc:color-option->html bg-color-op)))
       
       ;; the title of the report will be rendered by the 
       ;; selected style sheet.  All we have to do is set it in the
@@ -350,8 +333,8 @@ new, totally cool report, consult the mailing list ~a.")
           (gnc:html-markup-anchor 
            "mailto:gnucash-devel@gnucash.org"
            (gnc:html-markup-tt "gnucash-devel@gnucash.org")))
-         (_ "For details on subscribing to that list, see &lt;http://www.gnucash.org/&gt;.")
-         (_ "You can learn more about writing scheme at &lt;http://www.scheme.com/tspl2d/&gt;."))
+         (_ "For details on subscribing to that list, see &lt;https://www.gnucash.org/&gt;.")
+         (_ "You can learn more about writing scheme at &lt;https://www.scheme.com/tspl2d/&gt;."))
 
         (gnc:html-markup-p
          (gnc:html-markup/format

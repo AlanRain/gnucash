@@ -125,7 +125,7 @@
 
 <!-- ====================================================================== -->
 <!-- The HTML for the invoice starts here -->
-<html>
+<html dir='auto'>
 <head>
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" >
 <title><?scm:d (_ "Invoice") ?> <?scm:d invoiceid ?></title>
@@ -252,13 +252,11 @@
       <?scm ) (begin ?>
         <tr>
            <td align="right"><?scm:d (nbsp (_ "Invoice Date")) ?>:&nbsp;</td>
-           <td align="right"><?scm:d (nbsp (strftime dateformat
-                                            (localtime postdate))) ?></td>
+           <td align="right"><?scm:d (nbsp (gnc-print-time64 postdate dateformat)) ?></td>
         </tr>
         <tr>
            <td align="right"><?scm:d (nbsp (_ "Due Date")) ?>:&nbsp;</td>
-           <td align="right"><?scm:d (nbsp (strftime dateformat
-                                            (localtime duedate))) ?></td>
+           <td align="right"><?scm:d (nbsp (gnc-print-time64 duedate dateformat)) ?></td>
         </tr> <?scm )) ?>
         <?scm (if (not (string=? billingid "")) (begin ?>
           <tr>
@@ -343,7 +341,7 @@
     ?>
     <tr valign="top">
       <?scm (if opt-col-date (begin ?>
-      <td align="center" ><nobr><?scm:d (nbsp (qof-print-date (gncEntryGetDate entry))) ?></nobr></td>
+      <td align="center" ><?scm:d (nbsp (qof-print-date (gncEntryGetDate entry))) ?></td>
       <?scm )) ?>
       <td align="left"><?scm:d (gncEntryGetDescription entry) ?></td>
       <!-- td align="left">< ?scm:d (gncEntryGetNotes entry) ?></td -->
@@ -425,8 +423,8 @@
     <!-- total row -->
     <tr valign="top">
       <td align="left" class="total" colspan="<?scm:d (+ tbl_cols 1) ?>"><strong>
-        <?scm:d opt-amount-due-heading ?><?scm (if (not (string=? (gnc-commodity-get-mnemonic opt-report-currency) "")) (begin ?>,
-        <?scm:d (gnc-commodity-get-mnemonic opt-report-currency) ?><?scm )) ?></strong></td>
+        <?scm:d opt-amount-due-heading ?><?scm (if (not (string=? (gnc-commodity-get-mnemonic opt-invoice-currency) "")) (begin ?>,
+        <?scm:d (gnc-commodity-get-mnemonic opt-invoice-currency) ?><?scm )) ?></strong></td>
       <td align="right" class="total"><strong><?scm (display-comm-coll-total total-col #f) ?></strong></td>
     </tr>
 

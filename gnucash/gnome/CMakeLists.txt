@@ -125,7 +125,7 @@ set_source_files_properties (${gnc_gnome_SOURCES} PROPERTIES OBJECT_DEPENDS ${CO
 
 add_library (gnc-gnome ${gnc_gnome_SOURCES} ${gnc_gnome_noinst_HEADERS} ${SWIG_GNOME_C})
 target_link_libraries(gnc-gnome gncmod-gnome-search gncmod-ledger-core gncmod-report-gnome gncmod-report-system
-    gncmod-register-gnome gncmod-register-core gncmod-gnome-utils gncmod-engine ${GTK3_LDFLAGS} ${GTK_MAC_LDFLAGS})
+    gncmod-register-gnome gncmod-register-core gncmod-gnome-utils gncmod-engine PkgConfig::GTK3 ${GTK_MAC_LDFLAGS})
 
 target_compile_definitions (gnc-gnome PRIVATE -DG_LOG_DOMAIN=\"gnc.gui\" ${GTK_MAC_CFLAGS_OTHER})
 target_compile_options(gnc-gnome PRIVATE -Wno-deprecated-declarations)
@@ -143,7 +143,7 @@ add_dependencies (gnc-gnome swig-runtime-h)
 if (MAC_INTEGRATION)
   target_compile_options(gnc-gnome PRIVATE ${OSX_EXTRA_COMPILE_FLAGS})
   target_link_libraries(gnc-gnome ${OSX_EXTRA_LIBRARIES})
-endif(MAC_INTEGRATION)
+endif()
 
 
 install(TARGETS gnc-gnome
@@ -153,31 +153,44 @@ install(TARGETS gnc-gnome
 
 # No headers to install
 
-# FIXME: where does LC_ALL=C come from?
-
-set(CMAKE_COMMAND_TMP "")
-if (${CMAKE_VERSION} VERSION_GREATER 3.1)
-  set(CMAKE_COMMAND_TMP ${CMAKE_COMMAND} -E env)
-endif()
-
-
-if (${GETTEXT_VERSION_STRING} VERSION_LESS 0.19.6)
-    # Gettext is too old to be able to merge an appdata file.
-    # Fall back to providing an unmerged (and hence untranslated) appdata file.
-    configure_file (${CMAKE_CURRENT_SOURCE_DIR}/gnucash.appdata.xml.in
-                    ${CMAKE_CURRENT_BINARY_DIR}/gnucash.appdata.xml COPYONLY)
-else()
+set (GNC_APPDATA_IN ${CMAKE_CURRENT_BINARY_DIR}/gnucash.appdata.xml.in)
+if (NOT BUILDING_FROM_VCS)
+    # We're building from a dist tarball.
+    # As a convenience to packagers we have included a pretranslated
+    # intermediate appdata file in the dist tarball.
+    set (GNC_APPDATA_IN ${CMAKE_CURRENT_SOURCE_DIR}/gnucash.appdata.xml.in)
+elseif (TRANSLATE_GNUCASH_APPDATA)
     add_custom_command (
-        OUTPUT gnucash.appdata.xml
-        COMMAND ${CMAKE_COMMAND_TMP}
-            LC_ALL=C
+        OUTPUT ${GNC_APPDATA_IN}
+        COMMAND ${CMAKE_COMMAND} -E env
             ${GETTEXT_MSGFMT_EXECUTABLE}
-                --xml --template ${CMAKE_CURRENT_SOURCE_DIR}/gnucash.appdata.xml.in
+                --xml --template ${CMAKE_CURRENT_SOURCE_DIR}/gnucash.appdata.xml.in.in
                 -d ${CMAKE_SOURCE_DIR}/po
-                -o gnucash.appdata.xml
-        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/gnucash.appdata.xml.in
-    )
+                -o ${GNC_APPDATA_IN}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/gnucash.appdata.xml.in.in)
+else()
+    # Gettext is too old to be able to merge a desktop file
+    # and we're building from git.
+    # Fall back to providing an unmerged (and hence untranslated) appdata file.
+    # Note the build system won't allow generating a dist tarball in this scenario.
+    add_custom_command (
+        OUTPUT ${GNC_APPDATA_IN}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/gnucash.appdata.xml.in.in
+            ${GNC_APPDATA_IN}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/gnucash.appdata.xml.in.in)
 endif()
+
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gnucash.appdata.xml
+    DEPENDS ${GNC_APPDATA_IN} ${VCS_INFO_FILE} ${CMAKE_CURRENT_SOURCE_DIR}/gnucash.releases.xml
+    COMMAND ${CMAKE_COMMAND} -D SRC=${GNC_APPDATA_IN}
+                             -D DST=${CMAKE_CURRENT_BINARY_DIR}/gnucash.appdata.xml
+                             -D VCS_INFO_FILE=${VCS_INFO_FILE}
+                             -D GNUCASH_BUILD_ID=${GNUCASH_BUILD_ID}
+                             -D SRC_DIR=${CMAKE_SOURCE_DIR}
+                             -D REL_FILE=${CMAKE_CURRENT_SOURCE_DIR}/gnucash.releases.xml
+                             -P ${CMAKE_SOURCE_DIR}/cmake/configure-appdata.cmake)
 
 add_custom_target(gnucash-appdata ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/gnucash.appdata.xml)
 
@@ -185,30 +198,49 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/gnucash.appdata.xml DESTINATION  ${CMA
 
 #=======
 
-configure_file(gnucash.desktop.in.in gnucash.desktop.in)
-
-if (${GETTEXT_VERSION_STRING} VERSION_LESS 0.19)
-    # Gettext is too old to be able to merge a desktop file.
-    # Fall back to providing an unmerged (and hence untranslated) desktop file.
-    configure_file (${CMAKE_CURRENT_BINARY_DIR}/gnucash.desktop.in
-                    ${CMAKE_CURRENT_BINARY_DIR}/gnucash.desktop COPYONLY)
-else()
+set (GNC_DESKTOP_IN ${CMAKE_CURRENT_BINARY_DIR}/gnucash.desktop.in)
+if (NOT BUILDING_FROM_VCS)
+    # We're building from a dist tarball.
+    # As a convenience to packagers we have included a pretranslated
+    # intermediate desktop file in the dist tarball.
+    set (GNC_DESKTOP_IN ${CMAKE_CURRENT_SOURCE_DIR}/gnucash.desktop.in)
+elseif (TRANSLATE_GNUCASH_DESKTOP)
     add_custom_command (
-        OUTPUT gnucash.desktop
-        COMMAND ${CMAKE_COMMAND_TMP}
-            LC_ALL=C
+        OUTPUT ${GNC_DESKTOP_IN}
+        COMMAND ${CMAKE_COMMAND} -E env
             ${GETTEXT_MSGFMT_EXECUTABLE}
-                --desktop --template gnucash.desktop.in
+                --desktop --template ${CMAKE_CURRENT_SOURCE_DIR}/gnucash.desktop.in.in
                 -d ${CMAKE_SOURCE_DIR}/po
-                -o gnucash.desktop
-        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/gnucash.desktop.in
-    )
+                -o ${GNC_DESKTOP_IN}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/gnucash.desktop.in.in)
+else()
+    # Gettext is too old to be able to merge a desktop file
+    # and we're building from git.
+    # Fall back to providing an unmerged (and hence untranslated) desktop file.
+    # Note the build system won't allow generating a dist tarball in this scenario.
+    add_custom_command (
+        OUTPUT ${GNC_DESKTOP_IN}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/gnucash.desktop.in.in
+            ${GNC_DESKTOP_IN}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/gnucash.desktop.in.in)
 endif()
+
+add_custom_command (
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gnucash.desktop
+    DEPENDS ${GNC_DESKTOP_IN} ${VCS_INFO_FILE}
+    COMMAND ${CMAKE_COMMAND} -D SRC=${GNC_DESKTOP_IN}
+                             -D DST=${CMAKE_CURRENT_BINARY_DIR}/gnucash.desktop
+                             -D VCS_INFO_FILE=${VCS_INFO_FILE}
+                             -D PROJECT_VERSION=${PROJECT_VERSION}
+                             -D SRC_DIR=${CMAKE_SOURCE_DIR}
+                             -P ${CMAKE_SOURCE_DIR}/cmake/configure-gnucash-desktop.cmake)
 
 add_custom_target(gnucash-desktop ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/gnucash.desktop)
 
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/gnucash.desktop DESTINATION  ${CMAKE_INSTALL_DATADIR}/applications)
 
 set_dist_list(gnome_DIST
-        CMakeLists.txt gnome.i gnucash.appdata.xml.in gnucash.desktop.in.in
-        ${gnc_gnome_noinst_HEADERS} ${gnc_gnome_SOURCES})
+        CMakeLists.txt gnome.i gnucash.appdata.xml.in.in gnucash.desktop.in.in
+        gnucash.releases.xml ${gnc_gnome_noinst_HEADERS} ${gnc_gnome_SOURCES})
+dist_add_generated(${BUILDING_FROM_VCS} gnucash.appdata.xml.in gnucash.desktop.in)

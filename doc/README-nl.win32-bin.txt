@@ -12,9 +12,9 @@ balans en nauwkeurige rapporten te verzekeren.
 
 Beschikbare bronnen voor ondersteuning
 
-Online veel gestelde vragen (FAQ):    http://wiki.gnucash.org/wiki/FAQ
-Mailing Lijsten:  http://wiki.gnucash.org/wiki/Mailing_Lists
-IRC (Chat):    Channel #gnucash on server irc.gnome.org, see also http://wiki.gnucash.org/wiki/IRC
+Online veel gestelde vragen (FAQ):    https://wiki.gnucash.org/wiki/FAQ
+Mailing Lijsten:  https://wiki.gnucash.org/wiki/Mailing_Lists
+IRC (Chat):    Channel #gnucash on server irc.gnome.org, see also https://wiki.gnucash.org/wiki/IRC
 
 Als je programmafouten (bugs) of problemen ervaart, aarzel niet om deze te melden in ons
 bug opvolgsysteem "Bugzilla":
@@ -41,11 +41,10 @@ in het "Hulp" menu onder het "Tutorial en concepten gids".
 Over het programma:
 
 GnuCash is a  vrij, open source boekhoudprogramma uitgegeven onder de
-GNU General Public License (GPL). Het wordt door 12 personen uit meer dan
-6 landen gezamelijk ontwikkeld.
+GNU General Public License (GPL). Meer dan 200 programmeurs en 40
+documentie schrijvers hebben gedurende 20+ jaar bijgedragen aan de ontwikkeling
+ervan. Voor meer info, zie de AUTHORS en DOCUMENTORS bestanden.
 
 De ontwikkeling van GnuCash begon in 1997, de de eerste uitgave was in 1998. 
 
 -------------------
-
-Dit is het Nederlandstalige GnuCash 2.2.x LEESMIJ bestand voor het Windows installatie programma.

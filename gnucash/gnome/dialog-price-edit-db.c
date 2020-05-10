@@ -205,6 +205,7 @@ gnc_prices_dialog_remove_clicked (GtkWidget *widget, gpointer data)
         g_list_foreach(price_list, (GFunc)remove_helper, pdb_dialog->price_db);
     }
     g_list_free(price_list);
+    gnc_gui_refresh_all ();
     LEAVE(" ");
 }
 
@@ -364,7 +365,7 @@ get_fiscal_end_date (void)
     char datebuff[MAX_DATE_LENGTH + 1];
     memset (datebuff, 0, sizeof(datebuff));
     end = gnc_accounting_period_fiscal_end();
-    qof_print_date_buff(datebuff, sizeof(datebuff),
+    qof_print_date_buff(datebuff, MAX_DATE_LENGTH,
                         gnc_accounting_period_fiscal_end());
     PINFO("Fiscal end date is %s", datebuff);
 
@@ -504,6 +505,7 @@ gnc_prices_dialog_remove_old_clicked (GtkWidget *widget, gpointer data)
         }
         g_list_free (comm_list);
     }
+    gnc_gui_refresh_all ();
     gtk_widget_destroy (pdb_dialog->remove_dialog);
     LEAVE(" ");
 }
@@ -799,7 +801,7 @@ show_handler (const char *klass, gint component_id,
     ENTER(" ");
     if (!pdb_dialog)
     {
-        LEAVE("no data strucure");
+        LEAVE("no data structure");
         return(FALSE);
     }
 
