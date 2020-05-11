@@ -591,7 +591,7 @@ static std::string migrate_gnc_datahome()
 
     bl::generator gen;
     gen.add_messages_path(gnc_path_get_datadir());
-    gen.add_messages_domain(PACKAGE);
+    gen.add_messages_domain(PROJECT_NAME);
 
     std::stringstream migration_msg;
     migration_msg.imbue(gnc_get_locale());
@@ -737,7 +737,7 @@ static std::string migrate_gnc_datahome()
 #if defined G_OS_WIN32 ||defined MAC_INTEGRATION
 constexpr auto path_package = PACKAGE_NAME;
 #else
-constexpr auto path_package = PACKAGE;
+constexpr auto path_package = PROJECT_NAME;
 #endif
 
 // Initialize the user's config directory for gnucash
@@ -1024,6 +1024,21 @@ gnc_userdata_dir_as_path (void)
     return gnc_userdata_home;
 }
 
+static const bfs::path&
+gnc_userconfig_dir_as_path (void)
+{
+    if (gnc_userdata_home.empty())
+        /* Don't create missing directories automatically except
+         * if the target directory is the temporary directory. This
+         * should be done properly at a higher level (in the gui
+         * code most likely) very early in application startup.
+         * This call is just a fallback to prevent the code from
+         * crashing because no directories were configured. */
+        gnc_filepath_init();
+
+    return gnc_userconfig_home;
+}
+
 gchar *gnc_file_path_absolute (const gchar *prefix, const gchar *relative)
 {
     bfs::path path_relative (relative);
@@ -1054,7 +1069,7 @@ gchar *gnc_file_path_absolute (const gchar *prefix, const gchar *relative)
 }
 
 /** @fn gchar * gnc_build_userdata_path (const gchar *filename)
- *  @brief Make a path to filename in the user's configuration directory.
+ *  @brief Make a path to filename in the user's gnucash data directory.
  *
  * @param filename The name of the file
  *
@@ -1066,6 +1081,21 @@ gchar *
 gnc_build_userdata_path (const gchar *filename)
 {
     return g_strdup((gnc_userdata_dir_as_path() / filename).string().c_str());
+}
+
+/** @fn gchar * gnc_build_userconfig_path (const gchar *filename)
+ *  @brief Make a path to filename in the user's configuration directory.
+ *
+ * @param filename The name of the file
+ *
+ *  @return An absolute path. The returned string should be freed by the user
+ *  using g_free().
+ */
+
+gchar *
+gnc_build_userconfig_path (const gchar *filename)
+{
+    return g_strdup((gnc_userconfig_dir_as_path() / filename).string().c_str());
 }
 
 /* Test whether c is a valid character for a win32 file name.
@@ -1135,6 +1165,22 @@ gnc_build_data_path (const gchar *filename)
     return g_strdup(path.c_str());
 }
 
+/** @fn gchar * gnc_build_scm_path (const gchar *filename)
+ *  @brief Make a path to filename in the scm directory.
+ *
+ * @param filename The name of the file
+ *
+ *  @return An absolute path. The returned string should be freed by the user
+ *  using g_free().
+ */
+
+gchar *
+gnc_build_scm_path (const gchar *filename)
+{
+    gchar *result = g_build_filename(gnc_path_get_scmdir(), filename, (gchar *)NULL);
+    return result;
+}
+
 /** @fn gchar * gnc_build_report_path (const gchar *filename)
  *  @brief Make a path to filename in the report directory.
  *
@@ -1148,6 +1194,22 @@ gchar *
 gnc_build_report_path (const gchar *filename)
 {
     gchar *result = g_build_filename(gnc_path_get_reportdir(), filename, (gchar *)NULL);
+    return result;
+}
+
+/** @fn gchar * gnc_build_reports_path (const gchar *dirname)
+ *  @brief Make a path to dirname in the reports directory.
+ *
+ * @param dirname The name of the subdirectory
+ *
+ *  @return An absolute path. The returned string should be freed by the user
+ *  using g_free().
+ */
+
+gchar *
+gnc_build_reports_path (const gchar *dirname)
+{
+    gchar *result = g_build_filename(gnc_path_get_reportsdir(), dirname, (gchar *)NULL);
     return result;
 }
 

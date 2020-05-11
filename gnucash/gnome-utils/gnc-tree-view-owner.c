@@ -87,7 +87,7 @@ typedef struct GncTreeViewOwnerPrivate
 } GncTreeViewOwnerPrivate;
 
 #define GNC_TREE_VIEW_OWNER_GET_PRIVATE(o)  \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_TREE_VIEW_OWNER, GncTreeViewOwnerPrivate))
+   ((GncTreeViewOwnerPrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_TREE_VIEW_OWNER))
 
 
 /************************************************************/
@@ -110,7 +110,7 @@ gnc_tree_view_owner_class_init (GncTreeViewOwnerClass *klass)
     o_class->finalize = gnc_tree_view_owner_finalize;
 
     gnc_hook_add_dangler(HOOK_CURRENCY_CHANGED,
-                         (GFunc)gtvo_currency_changed_cb, NULL);
+                         (GFunc)gtvo_currency_changed_cb, NULL, NULL);
 }
 
 /********************************************************************\
@@ -367,7 +367,7 @@ gnc_tree_view_owner_new (GncOwnerType owner_type)
     }
     /* Create our view */
     view = g_object_new (GNC_TYPE_TREE_VIEW_OWNER,
-                         "name", "owner_tree", NULL);
+                         "name", "gnc-id-owner-tree", NULL);
 
     priv = GNC_TREE_VIEW_OWNER_GET_PRIVATE(GNC_TREE_VIEW_OWNER (view));
 
@@ -476,9 +476,7 @@ gnc_tree_view_owner_new (GncOwnerType owner_type)
                                         GNC_TREE_VIEW_COLUMN_VISIBLE_ALWAYS,
                                         sort_by_string);
     gnc_tree_view_add_toggle_column (view, _("Active"),
-                                     /* Translators: This string has a context prefix; the translation
-                                        must only contain the part after the | character. */
-                                     Q_("Column letter for 'Active'|A"),
+                                     C_("Column letter for 'Active'", "A"),
                                      GNC_OWNER_TREE_ACTIVE_COL,
                                      GNC_TREE_MODEL_OWNER_COL_ACTIVE,
                                      GNC_TREE_VIEW_COLUMN_VISIBLE_ALWAYS,
@@ -1142,9 +1140,9 @@ gppot_filter_response_cb (GtkWidget *dialog,
     }
 
     /* Clean up and delete dialog */
-    gptemp = (gpointer *)fd->dialog;
+    gptemp = (gpointer)fd->dialog;
     g_atomic_pointer_compare_and_exchange(&gptemp,
-                                          dialog, NULL);
+                                          (gpointer)dialog, NULL);
     fd->dialog = gptemp;
     gtk_widget_destroy(dialog);
     LEAVE("");

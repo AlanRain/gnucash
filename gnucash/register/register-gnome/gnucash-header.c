@@ -74,7 +74,7 @@ gnc_header_draw_offscreen (GncHeader *header)
 
     // Get the color type and apply the css class
     color_type = gnc_table_get_color (table, virt_loc, NULL);
-    gnucash_get_style_classes (header->sheet, stylectxt, color_type);
+    gnucash_get_style_classes (header->sheet, stylectxt, color_type, FALSE);
 
     if (header->surface)
         cairo_surface_destroy (header->surface);
@@ -133,6 +133,8 @@ gnc_header_draw_offscreen (GncHeader *header)
             virt_loc.phys_col_offset = j;
 
             cd = gnucash_style_get_cell_dimensions (style, i, j);
+            if (!cd) continue;
+            
             height = cd->pixel_height;
             if (header->in_resize && (j == header->resize_col))
                 width = header->resize_col_width;
@@ -320,6 +322,8 @@ pointer_on_resize_line (GncHeader *header, int x, G_GNUC_UNUSED int y, int *col)
     for (j = 0; j < style->ncols; j++)
     {
         cd = gnucash_style_get_cell_dimensions (style, 0, j);
+        if (!cd) continue;
+        
         pixels += cd->pixel_width;
         if (x >= pixels - 1 && x <= pixels + 1)
             on_the_line = TRUE;
@@ -346,8 +350,8 @@ find_resize_col (GncHeader *header, int col)
     /* skip to the right over zero-width columns */
     while ((col + 1 < style->ncols) &&
             (cd = gnucash_style_get_cell_dimensions (style, 0, col + 1)) &&
-            (cd->pixel_width == 0))
-        col++;
+            cd && (cd->pixel_width == 0))
+        ++col;
 
     /* now go back left till we have a resizable column */
     while (col >= start)
@@ -395,8 +399,13 @@ static gint
 gnc_header_event (GtkWidget *widget, GdkEvent *event)
 {
     GncHeader *header = GNC_HEADER(widget);
+    GdkWindow *window = gtk_widget_get_window (widget);
     int x, y;
     int col;
+
+    if (!header->resize_cursor)
+        header->resize_cursor = gdk_cursor_new_for_display (gdk_window_get_display (window),
+                                                            GDK_SB_H_DOUBLE_ARROW);
 
     switch (event->type)
     {
@@ -421,11 +430,9 @@ gnc_header_event (GtkWidget *widget, GdkEvent *event)
 
         if (pointer_on_resize_line(header, x, y, &col) &&
                 gnucash_style_col_is_resizable (header->style, col))
-            gdk_window_set_cursor (gtk_widget_get_window (widget),
-                                   header->resize_cursor);
+            gdk_window_set_cursor (window, header->resize_cursor);
         else
-            gdk_window_set_cursor (gtk_widget_get_window (widget),
-                                   header->normal_cursor);
+            gdk_window_set_cursor (window, header->normal_cursor);
         break;
 
     case GDK_BUTTON_PRESS:
@@ -449,6 +456,7 @@ gnc_header_event (GtkWidget *widget, GdkEvent *event)
 
             cd = gnucash_style_get_cell_dimensions
                  (header->style, 0, col);
+            if (!cd) break;
 
             header->in_resize = TRUE;
             header->resize_col = col;
@@ -584,14 +592,11 @@ gnc_header_init (GncHeader *header)
     header->cursor_name = NULL;
     header->in_resize = FALSE;
     header->resize_col = -1;
-    header->resize_cursor = gdk_cursor_new_for_display (gdk_display_get_default (), GDK_SB_H_DOUBLE_ARROW);
+    header->resize_cursor = NULL;
     header->normal_cursor = NULL;
     header->height = 20;
     header->width = 400;
     header->style = NULL;
-
-    // This sets a style class for when Gtk+ version is less than 3.20
-    gnc_widget_set_css_name (GTK_WIDGET(header), "header");
 
     gtk_widget_add_events(GTK_WIDGET(header), (GDK_EXPOSURE_MASK
                           | GDK_BUTTON_PRESS_MASK
@@ -611,9 +616,7 @@ gnc_header_class_init (GncHeaderClass *header_class)
     GObjectClass  *object_class = G_OBJECT_CLASS (header_class);
     GtkWidgetClass *item_class = GTK_WIDGET_CLASS (header_class);
 
-#if GTK_CHECK_VERSION(3,20,0)
-    gtk_widget_class_set_css_name (GTK_WIDGET_CLASS(header_class), "header");
-#endif
+    gtk_widget_class_set_css_name (GTK_WIDGET_CLASS(header_class), "gnc-id-header");
 
     parent_class = g_type_class_peek_parent (header_class);
 

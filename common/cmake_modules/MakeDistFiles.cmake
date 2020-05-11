@@ -1,9 +1,4 @@
 
-if (${CMAKE_VERSION} VERSION_LESS 3.3)
-    include(CMakeParseArguments)
-endif()
-
-
 function(set_local_dist output)
     set(dist_files "")
     foreach(file ${ARGN})
@@ -44,10 +39,9 @@ endfunction()
 # options were passed to cmake.
 # To determine this, the first parameter passed to this function should
 # be an indicator whether or not the files in the list are actually built
-# in this configuration. At the time of this writing there are two
-# cmake variables that control this, and hence can be used here:
+# in this configuration. At the time of this writing there is one
+# cmake variable that controls this, and hence can be used here:
 # BUILDING_FROM_VCS: is YES when building from a git source tree
-# GENERATE_SWIG_WRAPPERS: is YES when the swig wrappers should be built
 function (dist_add_generated_internal _needs_target _is_built)
     if (_is_built)
         set (DIST_BUILD_SOURCE_DIR ${CMAKE_BINARY_DIR})

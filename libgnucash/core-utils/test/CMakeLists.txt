@@ -25,7 +25,7 @@ endif()
 if (MAC_INTEGRATION)
   target_compile_options(test-userdata-dir PRIVATE ${OSX_EXTRA_COMPILE_FLAGS})
   target_compile_definitions(test-userdata-dir PRIVATE ${GTK_MAC_CFLAGS_OTHER})
-endif(MAC_INTEGRATION)
+endif()
 
 set(gtest_core_utils_INCLUDES
   ${MODULEPATH}
@@ -33,22 +33,20 @@ set(gtest_core_utils_INCLUDES
   ${CMAKE_SOURCE_DIR}/common # for platform.h
   ${CMAKE_BINARY_DIR}/libgnucash/core-utils # for gncla-dir.h
   ${GLIB2_INCLUDE_DIRS}
-  ${GTEST_INCLUDE_DIR}
   )
 
 set(gtest_core_utils_LIBS
   ${GLIB2_LDFLAGS}
   ${Boost_LIBRARIES}
   ${GTHREAD_LDFLAGS}
-  ${GTEST_LIB})
+  gtest)
 
 set(test_gnc_path_util_SOURCES
   ${MODULEPATH}/gnc-path.c
   ${MODULEPATH}/binreloc.c
   ${MODULEPATH}/gnc-filepath-utils.cpp
   ${MODULEPATH}/gnc-locale-utils.cpp
-  gtest-path-utilities.cpp
-  ${GTEST_SRC})
+  gtest-path-utilities.cpp)
 
 gnc_add_test(test-gnc-path-util "${test_gnc_path_util_SOURCES}"
   gtest_core_utils_INCLUDES gtest_core_utils_LIBS "GNC_UNINSTALLED=yes")

@@ -90,8 +90,6 @@ struct _order_window
     GtkWidget *	active_check;
 
     GtkWidget * cd_label;
-    GtkWidget * hide1;
-    GtkWidget * hide2;
     GtkWidget * close_order_button;
 
     GtkWidget *	owner_box;
@@ -512,8 +510,6 @@ gnc_order_update_window (OrderWindow *ow)
     {
         gtk_widget_hide (ow->closed_date);
         gtk_widget_hide (ow->cd_label);
-        gtk_widget_hide (ow->hide1);
-        gtk_widget_hide (ow->hide2);
     }
 
     if (ow->dialog_type == VIEW_ORDER)
@@ -594,8 +590,9 @@ gnc_order_new_window (GtkWindow *parent, QofBook *bookp, OrderDialogType type,
     ow->dialog = GTK_WIDGET(gtk_builder_get_object (builder, "order_entry_dialog"));
     gtk_window_set_transient_for (GTK_WINDOW(ow->dialog), parent);
 
-    // Set the style context for this dialog so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(ow->dialog), "GncOrderDialog");
+    // Set the name for this dialog so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(ow->dialog), "gnc-id-order");
+    gnc_widget_style_context_add_class (GTK_WIDGET(ow->dialog), "gnc-class-orders");
 
     /* Grab the widgets */
     ow->id_entry = GTK_WIDGET(gtk_builder_get_object (builder, "id_entry"));
@@ -606,8 +603,6 @@ gnc_order_new_window (GtkWindow *parent, QofBook *bookp, OrderDialogType type,
     ow->owner_label = GTK_WIDGET(gtk_builder_get_object (builder, "owner_label"));
 
     ow->cd_label = GTK_WIDGET(gtk_builder_get_object (builder, "cd_label"));
-    ow->hide1 = GTK_WIDGET(gtk_builder_get_object (builder, "hide1"));
-    ow->hide2 = GTK_WIDGET(gtk_builder_get_object (builder, "hide2"));
     ow->close_order_button = GTK_WIDGET(gtk_builder_get_object (builder, "close_order_button"));
 
 
@@ -710,8 +705,9 @@ gnc_order_window_new_order (GtkWindow *parent, QofBook *bookp, GncOwner *owner)
     ow->dialog = GTK_WIDGET(gtk_builder_get_object (builder, "new_order_dialog"));
     gtk_window_set_transient_for (GTK_WINDOW(ow->dialog), parent);
 
-    // Set the style context for this dialog so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(ow->dialog), "GncOrderDialog");
+    // Set the name for this dialog so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(ow->dialog), "gnc-id-new-order");
+    gnc_widget_style_context_add_class (GTK_WIDGET(ow->dialog), "gnc-class-orders");
 
     g_object_set_data (G_OBJECT (ow->dialog), "dialog_info", ow);
 
@@ -954,7 +950,7 @@ gnc_order_search (GtkWindow *parent, GncOrder *start, GncOwner *owner, QofBook *
                                      params, columns, q, q2,
                                      buttons, NULL, new_order_cb,
                                      sw, free_order_cb, GNC_PREFS_GROUP_SEARCH,
-                                     NULL, "GncFindOrderDialog");
+                                     NULL, "gnc-class-orders");
 }
 
 GNCSearchWindow *

@@ -40,7 +40,6 @@
 #include "swig-runtime.h"
 #include "guile-mappings.h"
 
-#include "guile-util.h"
 #include "gnc-engine.h"
 #include "gnc-plugin-menu-additions.h"
 #include "gnc-window.h"
@@ -70,7 +69,7 @@ typedef struct GncPluginMenuAdditionsPrivate
 } GncPluginMenuAdditionsPrivate;
 
 #define GNC_PLUGIN_MENU_ADDITIONS_GET_PRIVATE(o)  \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_PLUGIN_MENU_ADDITIONS, GncPluginMenuAdditionsPrivate))
+   ((GncPluginMenuAdditionsPrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_PLUGIN_MENU_ADDITIONS))
 
 
 /** Per-window private data for this plugin.  This plugin is unique in
@@ -424,7 +423,7 @@ gnc_plugin_menu_additions_add_to_window (GncPlugin *plugin,
     per_window.window = window;
     per_window.ui_manager = window->ui_merge;
     per_window.group = gtk_action_group_new ("MenuAdditions" );
-    gtk_action_group_set_translation_domain (per_window.group, GETTEXT_PACKAGE);
+    gtk_action_group_set_translation_domain (per_window.group, PROJECT_NAME);
     per_window.merge_id = gtk_ui_manager_new_merge_id(window->ui_merge);
     gtk_ui_manager_insert_action_group(window->ui_merge, per_window.group, 0);
 
@@ -474,7 +473,8 @@ gnc_plugin_menu_additions_remove_from_window (GncPlugin *plugin,
     /* Have to remove our actions manually. Its only automatic if the
      * actions name is installed into the plugin class. */
     group = gnc_main_window_get_action_group(window, PLUGIN_ACTIONS_NAME);
-    if (group)
+
+    if (group && !window->just_plugin_prefs)
         gtk_ui_manager_remove_action_group(window->ui_merge, group);
 
     /* Note: This code does not clean up the per-callback data structures

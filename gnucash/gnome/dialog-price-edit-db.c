@@ -48,8 +48,7 @@
 #include "gnc-warnings.h"
 #include "swig-runtime.h"
 #include "guile-mappings.h"
-#include "guile-util.h"
-#include "engine-helpers-guile.h"
+#include "gnc-engine-guile.h"
 
 
 #define DIALOG_PRICE_DB_CM_CLASS "dialog-price-edit-db"
@@ -205,6 +204,7 @@ gnc_prices_dialog_remove_clicked (GtkWidget *widget, gpointer data)
         g_list_foreach(price_list, (GFunc)remove_helper, pdb_dialog->price_db);
     }
     g_list_free(price_list);
+    gnc_gui_refresh_all ();
     LEAVE(" ");
 }
 
@@ -353,6 +353,8 @@ selection_changed_cb (GtkTreeSelection *selection, gpointer data)
     gboolean have_rows = (g_list_length (rows) > 0 ? TRUE : FALSE);
 
     change_source_flag (PRICE_REMOVE_SOURCE_COMM, have_rows, pdb_dialog);
+    g_list_foreach (rows, (GFunc) gtk_tree_path_free, NULL);
+    g_list_free (rows);
 }
 
 static GDate
@@ -362,7 +364,7 @@ get_fiscal_end_date (void)
     char datebuff[MAX_DATE_LENGTH + 1];
     memset (datebuff, 0, sizeof(datebuff));
     end = gnc_accounting_period_fiscal_end();
-    qof_print_date_buff(datebuff, sizeof(datebuff),
+    qof_print_date_buff(datebuff, MAX_DATE_LENGTH,
                         gnc_accounting_period_fiscal_end());
     PINFO("Fiscal end date is %s", datebuff);
 
@@ -502,6 +504,7 @@ gnc_prices_dialog_remove_old_clicked (GtkWidget *widget, gpointer data)
         }
         g_list_free (comm_list);
     }
+    gnc_gui_refresh_all ();
     gtk_widget_destroy (pdb_dialog->remove_dialog);
     LEAVE(" ");
 }
@@ -513,16 +516,33 @@ gnc_prices_dialog_add_clicked (GtkWidget *widget, gpointer data)
     PricesDialog *pdb_dialog = data;
     GNCPrice *price = NULL;
     GList *price_list;
+    GList *comm_list;
+    gboolean unref_price = FALSE;
 
     ENTER(" ");
-    price_list = gnc_tree_view_price_get_selected_prices(pdb_dialog->price_tree);
-    if (price_list)
+    price_list = gnc_tree_view_price_get_selected_prices (pdb_dialog->price_tree);
+    comm_list = gnc_tree_view_price_get_selected_commodities (pdb_dialog->price_tree);
+
+    if (price_list) // selected row is on a price
     {
         price = price_list->data;
-        g_list_free(price_list);
+        g_list_free (price_list);
+    }
+    else if (comm_list) // selection contains price parent rows
+    {
+        if (g_list_length (comm_list) == 1) // make sure it is only one parent
+        {
+            price = gnc_price_create (pdb_dialog->book);
+            gnc_price_set_commodity (price, comm_list->data);
+            unref_price = TRUE;
+        }
+        g_list_free (comm_list);
     }
     gnc_price_edit_dialog (pdb_dialog->window, pdb_dialog->session,
                            price, GNC_PRICE_NEW);
+
+    if (unref_price)
+        gnc_price_unref (price);
     LEAVE(" ");
 }
 
@@ -570,12 +590,25 @@ gnc_prices_dialog_selection_changed (GtkTreeSelection *treeselection,
                                      gpointer data)
 {
     PricesDialog *pdb_dialog = data;
+    GtkTreeModel *model;
     GList *price_list;
+    GList *rows;
     gint length;
 
     ENTER(" ");
-    price_list = gnc_tree_view_price_get_selected_prices(pdb_dialog->price_tree);
-    length = g_list_length(price_list);
+    price_list = gnc_tree_view_price_get_selected_prices (pdb_dialog->price_tree);
+    length = g_list_length (price_list);
+    g_list_free (price_list);
+
+    model = gtk_tree_view_get_model (GTK_TREE_VIEW(pdb_dialog->price_tree));
+    rows = gtk_tree_selection_get_selected_rows (treeselection, &model);
+
+    // if selected rows greater than length, parents must of been selected also
+    if (g_list_length (rows) > length)
+        length = 0;
+
+    g_list_foreach (rows, (GFunc) gtk_tree_path_free, NULL);
+    g_list_free (rows);
 
     gtk_widget_set_sensitive (pdb_dialog->edit_button,
                               length == 1);
@@ -672,8 +705,9 @@ gnc_prices_dialog_create (GtkWidget * parent, PricesDialog *pdb_dialog)
     window = GTK_WIDGET(gtk_builder_get_object (builder, "prices_window"));
     pdb_dialog->window = window;
 
-    // Set the style context for this dialog so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(window), "GncPriceEditDialog");
+    // Set the name for this dialog so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(window), "gnc-id-price-edit");
+    gnc_widget_style_context_add_class (GTK_WIDGET(window), "gnc-class-securities");
 
     pdb_dialog->session = gnc_get_current_session();
     pdb_dialog->book = qof_session_get_book(pdb_dialog->session);
@@ -767,7 +801,7 @@ show_handler (const char *klass, gint component_id,
     ENTER(" ");
     if (!pdb_dialog)
     {
-        LEAVE("no data strucure");
+        LEAVE("no data structure");
         return(FALSE);
     }
 

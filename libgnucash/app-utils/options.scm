@@ -17,7 +17,7 @@
 ;; 51 Franklin Street, Fifth Floor    Fax:    +1-617-542-2652
 ;; Boston, MA  02110-1301,  USA       gnu@gnu.org
 (use-modules (ice-9 regex))
-(use-modules (gnucash gettext))
+(use-modules (gnucash core-utils))
 
 (define (rpterror-earlier type newoption fallback)
   ;; Translators: the 3 ~a below refer to (1) option type (2) unknown
@@ -202,11 +202,9 @@ the option '~a'."))
 
 
 (define (gnc:restore-form-generator value->string)
-  (lambda () (string-append
-              "(lambda (option) "
-              "(if option ((gnc:option-setter option) "
-              (value->string)
-              ")))")))
+  (lambda ()
+    (string-append "(lambda (o) (if o (gnc:option-set-value o "
+                   (value->string) ")))")))
 
 (define (gnc:value->string value)
   (format #f "~s" value))
@@ -746,31 +744,22 @@ the option '~a'."))
      (lambda () (map convert-to-account (default-getter)))
      (gnc:restore-form-generator value->string)
      (lambda (b p)
-       (define (save-acc list count)
-         (if (not (null? list))
-             (let ((key (string-append "acc" (gnc:value->string count))))
-               (qof-book-set-option b (car list) (append p (list key)))
-               (save-acc (cdr list) (+ 1 count)))))
-
-       (if option-set
-           (begin
-             (qof-book-set-option b (length option)
-                                             (append p '("len")))
-             (save-acc option 0))))
+       (when option-set
+         (qof-book-set-option b (length option) (append p '("len")))
+         (let loop ((option option) (idx 0))
+           (unless (null? option)
+             (qof-book-set-option
+              b (car option) (append p (list (format #f "acc~a" idx))))
+             (loop (cdr option) (1+ idx))))))
      (lambda (b p)
        (let ((len (qof-book-get-option b (append p '("len")))))
-         (define (load-acc count)
-           (if (< count len)
-               (let* ((key (string-append "acc" (gnc:value->string count)))
-                      (guid (qof-book-get-option
-                             b (append p (list key)))))
-                 (cons guid (load-acc (+ count 1))))
-               '()))
-         
-         (if (and len (integer? len))
-             (begin
-               (set! option (load-acc 0))
-               (set! option-set #t)))))
+         (when (and len (integer? len))
+           (set! option
+             (map
+              (lambda (idx)
+                (qof-book-get-option b (append p (list (format #f "acc~a" idx)))))
+              (iota len)))
+           (set! option-set #t))))
      validator
      (cons multiple-selection acct-type-list) #f #f #f)))
 
@@ -1092,25 +1081,20 @@ the option '~a'."))
      (lambda () default-value)
      (gnc:restore-form-generator value->string)
      (lambda (b p)
-       (define (save-item list count)
-         (if (not (null? list))
-             (let ((key (string-append "item" (gnc:value->string count))))
-               (qof-book-set-option b (car list) (append p (list key)))
-               (save-item (cdr list) (+ 1 count)))))
        (qof-book-set-option b (length value) (append p '("len")))
-       (save-item value 0))
+       (let loop ((value value) (idx 0))
+         (unless (null? value)
+           (qof-book-set-option
+            b (caar value) (append p (list (format #f "item~a" idx))))
+           (loop (cdr value) (1+ idx)))))
      (lambda (b p)
        (let ((len (qof-book-get-option b (append p '("len")))))
-         (define (load-item count)
-           (if (< count len)
-               (let* ((key (string-append "item" (gnc:value->string count)))
-                      (val (qof-book-get-option
-                            b (append p (list key)))))
-                 (cons val (load-item (+ count 1))))
-               '()))
-
          (if (and len (integer? len))
-             (set! value (load-item 0)))))
+             (set! value
+               (map
+                (lambda (idx)
+                  (qof-book-get-option b (append p (list (format #f "item~a" idx)))))
+                (iota len))))))
      (lambda (x)
        (if (list-legal x)
            (list #t x)
@@ -1669,70 +1653,68 @@ the option '~a'."))
 
   (define callback-hash (make-hash-table 23))
   (define last-callback-id 0)
+  (define new-names-alist
+    '(("Accounts to include" #f "Accounts")
+      ("Exclude transactions between selected accounts?" #f
+       "Exclude transactions between selected accounts")
+      ("Filter Accounts" #f "Filter By...")
+      ("Flatten list to depth limit?" #f "Flatten list to depth limit")
+      ("From" #f "Start Date")
+      ("Report Accounts" #f "Accounts")
+      ("Report Currency" #f "Report's currency")
+      ("Show Account Code?" #f "Show Account Code")
+      ("Show Full Account Name?" #f "Show Full Account Name")
+      ("Show Multi-currency Totals?" #f "Show Multi-currency Totals")
+      ("Show zero balance items?" #f "Show zero balance items")
+      ("Sign Reverses?" #f "Sign Reverses")
+      ("To" #f "End Date")
+      ("Charge Type" #f "Action") ;easy-invoice.scm, renamed June 2018
+      ;; the following 4 options in income-gst-statement.scm renamed Dec 2018
+      ("Individual income columns" #f "Individual sales columns")
+      ("Individual expense columns" #f "Individual purchases columns")
+      ("Remittance amount" #f "Gross Balance")
+      ("Net Income" #f "Net Balance")
+      ;; transaction.scm:
+      ("Use Full Account Name?" #f "Use Full Account Name")
+      ("Use Full Other Account Name?" #f "Use Full Other Account Name")
+      ("Void Transactions?" "Filter" "Void Transactions")
+      ("Void Transactions" "Filter" "Void Transactions")
+      ("Account Substring" "Filter" "Account Name Filter")
+      ;; invoice.scm, renamed November 2018
+      ("Individual Taxes" #f "Use Detailed Tax Summary")
+      ))
 
   (define (lookup-option section name)
     (let ((section-hash (hash-ref option-hash section)))
-      (if section-hash
-          (let ((option-hash (hash-ref section-hash name)))
-            (if option-hash
-                option-hash
-                ;; Option name was not found. Perhaps it was renamed ?
-                ;; Let's try to map it to a known new name.
-                ;; This list will try match names - if one is found
-                ;; the next item will describe a pair.
-                ;; (cons newsection newname)
-                ;; If newsection is #f then reuse previous section name.
-                ;;
-                ;; Please note the rename list currently supports renaming
-                ;; individual option names, or individual option names moved
-                ;; to another section. It does not currently support renaming
-                ;; whole sections.
-                (let* ((new-names-list (list
-                                        "Accounts to include" (cons #f "Accounts")
-                                        "Exclude transactions between selected accounts?" (cons #f "Exclude transactions between selected accounts")
-                                        "Filter Accounts" (cons #f "Filter By...")
-                                        "Flatten list to depth limit?" (cons #f "Flatten list to depth limit")
-                                        "From" (cons #f "Start Date")
-                                        "Report Accounts" (cons #f "Accounts")
-                                        "Report Currency" (cons #f "Report's currency")
-                                        "Show Account Code?" (cons #f "Show Account Code")
-                                        "Show Full Account Name?" (cons #f "Show Full Account Name")
-                                        "Show Multi-currency Totals?" (cons #f "Show Multi-currency Totals")
-                                        "Show zero balance items?" (cons #f "Show zero balance items")
-                                        "Sign Reverses?" (cons #f "Sign Reverses")
-                                        "To" (cons #f "End Date")
-                                        "Charge Type" (cons #f "Action") ;easy-invoice.scm, renamed June 2018
-                                        ;; the following 4 options in income-gst-statement.scm renamed Dec 2018
-                                        "Individual income columns" (cons #f "Individual sales columns")
-                                        "Individual expense columns" (cons #f "Individual purchases columns")
-                                        "Remittance amount" (cons #f "Gross Balance")
-                                        "Net Income" (cons #f "Net Balance")
-                                        ;; transaction.scm:
-                                        "Use Full Account Name?" (cons #f "Use Full Account Name")
-                                        "Use Full Other Account Name?" (cons #f "Use Full Other Account Name")
-                                        "Void Transactions?" (cons "Filter" "Void Transactions")
-                                        "Void Transactions" (cons "Filter" "Void Transactions")
-                                        "Account Substring" (cons "Filter" "Account Name Filter")
-                                        ;; invoice.scm, renamed November 2018
-                                        "Individual Taxes" (cons "#f" "Use Detailed Tax Summary")
-                                        ))
-                       (name-match (member name new-names-list)))
-
-                  (and name-match
-                       (let ((new-section (car (cadr name-match)))
-                             (new-name (cdr (cadr name-match))))
-                         (gnc:debug
-                          (format #f "option ~s/~s has been renamed to ~s/~s\n"
-                                  section name new-section new-name))
-                         ;; compare if new-section name exists.
-                         (if new-section
-                             ;; if so, if it's different to current section name
-                             ;; then try new section name
-                             (and (not (string=? new-section section))
-                                  (lookup-option new-section new-name))
-                             ;; else reuse section-name with new-name
-                             (lookup-option section new-name)))))))
-          #f)))
+      (and section-hash
+           (or (hash-ref section-hash name)
+               ;; Option name was not found. Perhaps it was renamed?
+               ;; Let's try to map to a known new name.  The alist
+               ;; new-names-alist will try match names - car is the old
+               ;; name, cdr is the 2-element list describing
+               ;; newsection newname. If newsection is #f then reuse
+               ;; previous section name. Please note the rename list
+               ;; currently supports renaming individual option names,
+               ;; or individual option names moved to another
+               ;; section. It does not currently support renaming
+               ;; whole sections.
+               (let ((name-match (assoc-ref new-names-alist name)))
+                 (and name-match
+                      (let ((new-section (car name-match))
+                            (new-name (cadr name-match)))
+                        (gnc:debug
+                         (format #f "option ~a/~a has been renamed to ~a/~a\n"
+                                 section name new-section new-name))
+                        (cond
+                         ;; new-name only
+                         ((not new-section)
+                          (lookup-option section new-name))
+                         ;; new-section different to current section
+                         ;; name, and possibly new-name
+                         ((not (string=? new-section section))
+                          (lookup-option new-section new-name))
+                         ;; no match, return #f
+                         (else #f)))))))))
 
   (define (option-changed section name)
     (set! options-changed #t)
@@ -2002,19 +1984,6 @@ the option '~a'."))
    (lambda (option)
      (gnc-option-db-register-option db_handle option))
    options))
-
-(define (gnc:save-options options options-string file header truncate?)
-  (issue-deprecation-warning
-   "gnc:save-options is deprecated.")
-  (let ((code (gnc:generate-restore-forms options options-string))
-        (port (false-if-exception
-               (if truncate? 
-                   (open file (logior O_WRONLY O_CREAT O_TRUNC))
-                   (open file (logior O_WRONLY O_CREAT O_APPEND))))))
-    (if port (begin
-               (display header port)
-               (display code port)
-               (close port)))))
 
 (define (gnc:options-make-end-date! options pagename optname sort-tag info)
   (gnc:register-option 

@@ -43,7 +43,6 @@
 #include "gnc-ui-util.h"
 #include "gnc-prefs.h"
 #include "gnc-combott.h"
-#include "guile-util.h"
 #include "gnc-main-window.h"
 
 /* This static indicates the debugging module that this .o belongs to. */
@@ -70,9 +69,15 @@ gnc_set_label_color(GtkWidget *label, gnc_numeric value)
     deficit = gnc_numeric_negative_p (value);
 
     if (deficit)
-        gnc_widget_set_style_context (GTK_WIDGET(label), "negative-numbers");
+    {
+        gnc_widget_style_context_remove_class (GTK_WIDGET(label), "gnc-class-default-color");
+        gnc_widget_style_context_add_class (GTK_WIDGET(label), "gnc-class-negative-numbers");
+    }
     else
-        gnc_widget_set_style_context (GTK_WIDGET(label), "default-color");
+    {
+        gnc_widget_style_context_remove_class (GTK_WIDGET(label), "gnc-class-negative-numbers");
+        gnc_widget_style_context_add_class (GTK_WIDGET(label), "gnc-class-default-color");
+    }
 }
 
 
@@ -99,34 +104,26 @@ gnc_restore_window_size(const char *group, GtkWindow *window, GtkWindow *parent)
 
     g_return_if_fail(group != NULL);
     g_return_if_fail(window != NULL);
+    g_return_if_fail(parent != NULL);
 
     if (!gnc_prefs_get_bool(GNC_PREFS_GROUP_GENERAL, GNC_PREF_SAVE_GEOMETRY))
         return;
 
     geometry = gnc_prefs_get_value (group, GNC_PREF_LAST_GEOMETRY);
+
     if (g_variant_is_of_type (geometry, (const GVariantType *) "(iiii)") )
     {
+        GdkWindow *win = gtk_widget_get_window (GTK_WIDGET(parent));
         GdkRectangle monitor_size;
-
-#if GTK_CHECK_VERSION(3,22,0)
-        GdkDisplay *display = gdk_display_get_default ();
+        GdkDisplay *display = gdk_window_get_display (win);
         GdkMonitor *mon;
-#else
-        GdkScreen *screen = gdk_screen_get_default ();
-        gint mon_num;
-#endif
 
         g_variant_get (geometry, "(iiii)",
                        &wpos[0],  &wpos[1],
                        &wsize[0], &wsize[1]);
 
-#if GTK_CHECK_VERSION(3,22,0)
         mon = gdk_display_get_monitor_at_point (display, wpos[0], wpos[1]);
         gdk_monitor_get_geometry (mon, &monitor_size);
-#else
-        mon_num = gdk_screen_get_monitor_at_point (screen, wpos[0], wpos[1]);
-        gdk_screen_get_monitor_geometry (screen, mon_num, &monitor_size);
-#endif
 
         DEBUG("monitor left top corner x: %d, y: %d, width: %d, height: %d",
               monitor_size.x, monitor_size.y, monitor_size.width, monitor_size.height);
@@ -143,7 +140,7 @@ gnc_restore_window_size(const char *group, GtkWindow *window, GtkWindow *parent)
             if (wpos[1] - monitor_size.y + wsize[1] > monitor_size.y + monitor_size.height)
                 wpos[1] = monitor_size.y + monitor_size.height - wsize[1];
 
-            /* make sure the cordinates have not left the monitor */
+            /* make sure the coordinates have not left the monitor */
             if (wpos[0] < monitor_size.x)
                 wpos[0] = monitor_size.x;
 
@@ -240,18 +237,13 @@ gnc_save_window_size(const char *group, GtkWindow *window)
 void
 gnc_window_adjust_for_screen(GtkWindow * window)
 {
+    GdkWindow *win;
+    GdkDisplay *display;
+    GdkMonitor *mon;
     GdkRectangle monitor_size;
     gint wpos[2];
     gint width;
     gint height;
-
-#if GTK_CHECK_VERSION(3,22,0)
-    GdkDisplay *display = gdk_display_get_default ();
-    GdkMonitor *mon;
-#else
-    GdkScreen *screen = gdk_screen_get_default ();
-    gint mon_num;
-#endif
 
     ENTER("");
 
@@ -262,16 +254,14 @@ gnc_window_adjust_for_screen(GtkWindow * window)
     if (gtk_widget_get_window (GTK_WIDGET(window)) == NULL)
         return;
 
+    win = gtk_widget_get_window (GTK_WIDGET(window));
+    display = gdk_window_get_display (win);
+
     gtk_window_get_position(GTK_WINDOW(window), &wpos[0], &wpos[1]);
     gtk_window_get_size(GTK_WINDOW(window), &width, &height);
 
-#if GTK_CHECK_VERSION(3,22,0)
     mon = gdk_display_get_monitor_at_point (display, wpos[0], wpos[1]);
     gdk_monitor_get_geometry (mon, &monitor_size);
-#else
-    mon_num = gdk_screen_get_monitor_at_point (screen, wpos[0], wpos[1]);
-    gdk_screen_get_monitor_geometry (screen, mon_num, &monitor_size);
-#endif
 
     DEBUG("monitor width is %d, height is %d; wwindow width is %d, height is %d",
            monitor_size.width, monitor_size.height, width, height);
@@ -286,7 +276,7 @@ gnc_window_adjust_for_screen(GtkWindow * window)
     if (wpos[1] - monitor_size.y + height > monitor_size.y + monitor_size.height)
         wpos[1] = monitor_size.y + monitor_size.height - height;
 
-    /* make sure the cordinates have not left the monitor */
+    /* make sure the coordinates have not left the monitor */
     if (wpos[0] < monitor_size.x)
         wpos[0] = monitor_size.x;
 
@@ -319,12 +309,8 @@ gnc_window_adjust_for_screen(GtkWindow * window)
 void
 gnc_label_set_alignment (GtkWidget *widget, gfloat xalign, gfloat yalign)
 {
-#if GTK_CHECK_VERSION(3,16,0)
     gtk_label_set_xalign (GTK_LABEL (widget), xalign);
     gtk_label_set_yalign (GTK_LABEL (widget), yalign);
-#else
-    gtk_misc_set_alignment (GTK_MISC (widget), xalign, yalign);
-#endif
 }
 
 /********************************************************************\
@@ -362,10 +348,26 @@ gnc_tree_view_get_grid_lines_pref (void)
  * Returns:  nothing                                                *
 \********************************************************************/
 void
-gnc_widget_set_style_context (GtkWidget *widget, const char *gnc_class)
+gnc_widget_style_context_add_class (GtkWidget *widget, const char *gnc_class)
 {
     GtkStyleContext *context = gtk_widget_get_style_context (widget);
     gtk_style_context_add_class (context, gnc_class);
+}
+
+/********************************************************************\
+ * Remove a style context class from a Widget                       *
+ *                                                                  *
+ * Args:    widget - widget to remove style class from              *
+ *       gnc_class - character string for css class name            *
+ * Returns:  nothing                                                *
+\********************************************************************/
+void
+gnc_widget_style_context_remove_class (GtkWidget *widget, const char *gnc_class)
+{
+    GtkStyleContext *context = gtk_widget_get_style_context (widget);
+
+    if (gtk_style_context_has_class (context, gnc_class))
+        gtk_style_context_remove_class (context, gnc_class);
 }
 
 /********************************************************************\
@@ -866,3 +868,17 @@ gnc_cost_policy_select_new (void)
     return cost_policy_widget;
 }
 
+/* This function returns a string for the CSS 'gnc-class-negative-numbers' class,
+ * the returned string must be freed
+ */
+gchar*
+gnc_get_negative_color (void)
+{
+    GdkRGBA color;
+    GtkWidget *label = gtk_label_new ("Color");
+    GtkStyleContext *context = gtk_widget_get_style_context (GTK_WIDGET(label));
+    gtk_style_context_add_class (context, "gnc-class-negative-numbers");
+    gtk_style_context_get_color (context, GTK_STATE_FLAG_NORMAL, &color);
+
+    return gdk_rgba_to_string (&color);
+}

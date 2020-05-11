@@ -170,39 +170,56 @@ gchar *gnc_path_get_accountsdir()
     return result;
 }
 
+/** Returns the file path to the directory containing all guile scripts, usually
+ * "$prefix/guile/site/x.y".
+ * This path is determined by querying guile for its sitedir and then
+ * rebasing this to be relative to our own installation prefix.
+ *
+ * @returns A newly allocated string. */
+gchar *gnc_path_get_scmdir()
+{
+    gchar *prefix = gnc_path_get_prefix ();
+    gchar *result = g_build_filename (prefix, GUILE_REL_SITEDIR, (char*)NULL);
+    g_free (prefix);
+
+    return result;
+}
+
 /** Returns the file path to the report directory, usually
- * "$prefix/share/gnucash/scm/gnucash/report".
+ * "$prefix/share/guile/site/x.y/gnucash/report".
  *
  * @returns A newly allocated string. */
 gchar *gnc_path_get_reportdir()
 {
-    /* Careful: if the cmake variable SCHEME_INSTALLED_SOURCE_DIR gets changed
-     * in toplevel CMakeLists.txt, this path should probably change as well.
-     * Currently this code assumes SCHEME_INSTALLED_SOURCE_DIR is set to
-     * pkgdatadir/scm
-     * We can't use GNC_SCM_INSTALL_DIR directly at build time to
-     * get this information, because on Windows and OS X
-     * the final path may get installed in a different location
-     * than assumed during build, invalidating the build path at
-     * runtime.
-     */
-    gchar *pkgdatadir = gnc_path_get_pkgdatadir ();
-    gchar *result = g_build_filename (pkgdatadir, "scm",
-                                      "gnucash", "report", (char*)NULL);
-    g_free (pkgdatadir);
+    gchar *scmdir = gnc_path_get_scmdir ();
+    gchar *result = g_build_filename (scmdir, "gnucash", "report", (char*)NULL);
+    g_free (scmdir);
 
+    return result;
+}
+
+/** Returns the file path to the reports directory, usually
+ * "$prefix/share/guile/site/x.y/gnucash/reports".
+ *
+ * @returns A newly allocated string. */
+gchar *gnc_path_get_reportsdir()
+{
+    gchar *scmdir = gnc_path_get_scmdir ();
+    gchar *result = g_build_filename (scmdir, "gnucash", "reports", NULL);
+    g_free (scmdir);
+    //printf("Returning reportsdir %s\n", result);
     return result;
 }
 
 /** Returns the file path to the standard
  * reports, usually
- * "$prefix/share/gnucash/scm/gnucash/report/standard-reports".
+ * "$prefix/share/guile/site/x.y/gnucash/reports/standard".
  *
  * @returns A newly allocated string. */
 gchar *gnc_path_get_stdreportsdir()
 {
     gchar *reportdir = gnc_path_get_reportdir ();
-    gchar *result = g_build_filename (reportdir, "standard-reports", NULL);
+    gchar *result = g_build_filename (reportdir, "reports", "standard", NULL);
     g_free (reportdir);
     //printf("Returning stdreportsdir %s\n", result);
     return result;

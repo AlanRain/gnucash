@@ -48,7 +48,7 @@ class ClassFromFunctions(object):
     add_method and add_methods_with_prefix.
     """
     def __new__(cls, *args, **kargs):
-        # why reimpliment __new__? Because later on we're going to
+        # why reimplement __new__? Because later on we're going to
         # use new to avoid creating new instances when existing instances
         # already exist with the same __instance value, or equivalent __instance
         # values, where this is desirable...
@@ -59,12 +59,15 @@ class ClassFromFunctions(object):
         self._module[self._new_instance] or using existing instance
         data. (specified with the keyword argument, instance)
 
+        if instance argument is None it will be ignored and the
+        constructor will be called to get a new instance
+
         Pass the arguments that should be passed on to
-        self._module[self._new_instance] . Any arguments of that
+        self._module[self._new_instance]. Any arguments of that
         are instances of ClassFromFunctions will be switched with the instance
         data. (by calling the .instance property)
         """
-        if INSTANCE_ARGUMENT in kargs:
+        if INSTANCE_ARGUMENT in kargs and kargs[INSTANCE_ARGUMENT] is not None:
             self.__instance = kargs[INSTANCE_ARGUMENT]
         else:
             self.__instance = getattr(self._module, self._new_instance)(

@@ -122,7 +122,7 @@ public:
      *  match those of another one (the "parent"). Note this function is *not*
      *  symmetrical. This instance can have empty properties and still be considered
      *  part of the parent if the other properties match the parent's.
-     *  A fully empty instance will will equally be considered part of the parent.
+     *  A fully empty instance will equally be considered part of the parent.
      *
      *  This function is intended to discover multi-split transaction lines in an import
      *  file where the first line defines the transaction (with a first split) and subsequent
@@ -157,6 +157,7 @@ public:
         m_currency_format{currency_format}{};
     void set (GncTransPropType prop_type, const std::string& value);
     void reset (GncTransPropType prop_type);
+    void add (GncTransPropType prop_type, const std::string& value);
     void set_date_format (int date_format) { m_date_format = date_format ;}
     void set_currency_format (int currency_format) { m_currency_format = currency_format; }
     std::string verify_essentials (void);

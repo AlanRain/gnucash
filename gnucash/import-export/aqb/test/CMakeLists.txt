@@ -7,8 +7,8 @@ set(test_aqb_INCLUDE_DIRS
   ${CMAKE_SOURCE_DIR}/gnucash/import-export
   ${CMAKE_SOURCE_DIR}/gnucash/gnome
   ${CMAKE_SOURCE_DIR}/gnucash/register/ledger-core
-  ${CMAKE_SOURCE_DIR}/gnucash/register/regiser-gnome
-  ${CMAKE_SOURCE_DIR}/gnucash/register/regitser-core
+  ${CMAKE_SOURCE_DIR}/gnucash/register/register-gnome
+  ${CMAKE_SOURCE_DIR}/gnucash/register/register-core
   ${CMAKE_SOURCE_DIR}/gnucash/gnome-utils
   ${CMAKE_SOURCE_DIR}/libgnucash/app-utils
   ${CMAKE_SOURCE_DIR}/libgnucash/engine
@@ -20,9 +20,9 @@ set(test_aqb_INCLUDE_DIRS
 )
 
 set(test_aqb_LIBS
-  gncmod-aqbanking gncmod-generic-import gnc-gnome gncmod-gnome-utils
-  gncmod-ledger-core gncmod-report-gnome gncmod-app-utils
-  gncmod-backend-xml-utils gncmod-engine gnc-core-utils gnc-module
+  gncmod-aqbanking gnc-generic-import gnc-gnome gnc-gnome-utils
+  gnc-ledger-core gnc-app-utils
+  gncmod-backend-xml-utils gnc-engine gnc-core-utils gnc-module
   ${GLIB2_LDFLAGS}
 )
 

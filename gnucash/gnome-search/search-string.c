@@ -60,7 +60,7 @@ struct _GNCSearchStringPrivate
 G_DEFINE_TYPE_WITH_PRIVATE(GNCSearchString, gnc_search_string, GNC_TYPE_SEARCH_CORE_TYPE)
 
 #define _PRIVATE(o) \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_SEARCH_STRING, GNCSearchStringPrivate))
+   ((GNCSearchStringPrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_SEARCH_STRING))
 
 static GNCSearchCoreTypeClass *parent_class;
 
@@ -175,7 +175,7 @@ gncs_validate (GNCSearchCoreType *fe)
     if (fi->how == SEARCH_STRING_MATCHES_REGEX ||
             fi->how == SEARCH_STRING_NOT_MATCHES_REGEX)
     {
-        regex_t regexpat;        /* regex patern */
+        regex_t regexpat;        /* regex pattern */
         gint regerr;
         int flags = REG_EXTENDED;
 

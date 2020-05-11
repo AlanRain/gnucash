@@ -50,7 +50,11 @@
 #include "import-utilities.h"
 #include "qof.h"
 #include "engine-helpers.h"
-#include <aqbanking/abgui.h>
+#ifdef AQBANKING6
+# include <aqbanking/gui/abgui.h>
+#else
+# include <aqbanking/abgui.h>
+#endif
 
 /* This static indicates the debugging module that this .o belongs to.  */
 G_GNUC_UNUSED static QofLogModule log_module = G_LOG_DOMAIN;
@@ -155,6 +159,19 @@ gnc_AB_BANKING_new(void)
         api = AB_Banking_new("gnucash", NULL, 0);
         g_return_val_if_fail(api, NULL);
 
+#if AQBANKING_VERSION_INT >= 59925 \
+    || (AQBANKING_VERSION_INT >= 50709 && AQBANKING_VERSION_INT < 59900)
+        /* These two values must be set because newest bank regulation requires
+        the bank servers to require it. The string itself results from our
+        registration with the German bank association at
+        https://www.hbci-zka.de/register/prod_register.htm (where the
+        registration was requested and is managed by cstim). The function call was
+        introduced in aqbanking-5.99.25 and aqbanking-5.7.9. */
+        AB_Banking_RuntimeConfig_SetCharValue(api, "fintsRegistrationKey", "412748A1836CDD07181CE1910");
+        AB_Banking_RuntimeConfig_SetCharValue(api, "fintsApplicationVersionString", PROJECT_VERSION);
+#endif
+
+#ifndef AQBANKING6
         /* Check for config migration */
         if (AB_Banking_HasConf4(api) != 0)
         {
@@ -175,6 +192,7 @@ gnc_AB_BANKING_new(void)
                 }
             }
         }
+#endif
 
         /* Init the API */
         g_return_val_if_fail(AB_Banking_Init(api) == 0, NULL);
@@ -298,6 +316,28 @@ gnc_AB_VALUE_to_readable_string(const AB_VALUE *value)
         return g_strdup_printf("%.2f", 0.0);
 }
 
+
+gchar*
+gnc_ab_create_online_id(const gchar *bankcode, const gchar *accountnumber)
+{
+    gchar *online_id;
+
+    /* The accountnumber may have leading zeros, depending on where them
+     * accountnumber is came from, e.g. the accountnumber of accountinfo
+     * has no leading zeros while the (local)accountnumber of a transaction
+     * has leading zeros.
+     * So remove all leading '0', to get a consistent online_id.
+     */
+    while (accountnumber && *accountnumber == '0')
+        accountnumber++;
+
+    online_id = g_strconcat(bankcode ? bankcode : "",
+                            accountnumber ? accountnumber : "",
+                            (gchar*)NULL);
+
+    return online_id;
+}
+
 /**
  * Take a string from a GWEN_STRINGLIST, strip invalid utf8 and join it
  * to the rest.
@@ -310,10 +350,10 @@ join_ab_strings_cb(const gchar *str, gpointer user_data)
 
     if (!str || !*str)
         return NULL;
- 
+
     tmp = g_strdup(str);
     g_strstrip(tmp);
-    gnc_utf8_strip_invalid(tmp);
+    gnc_utf8_strip_invalid_and_controls(tmp);
 
     if (*acc)
     {
@@ -332,7 +372,9 @@ join_ab_strings_cb(const gchar *str, gpointer user_data)
 gchar *
 gnc_ab_get_remote_name(const AB_TRANSACTION *ab_trans)
 {
-#ifndef AQBANKING6
+#ifdef AQBANKING6
+    const char* ab_remote_name;
+#else
     const GWEN_STRINGLIST *ab_remote_name;
 #endif
     gchar *gnc_other_name = NULL;
@@ -342,16 +384,7 @@ gnc_ab_get_remote_name(const AB_TRANSACTION *ab_trans)
     ab_remote_name = AB_Transaction_GetRemoteName(ab_trans);
     if (ab_remote_name)
 #ifdef AQBANKING6
-    ab_transactionText = AB_Transaction_GetPurpose(ab_trans);
-    if (ab_transactionText)
-    {
-        gchar *tmp;
-
-        tmp = g_strdup(ab_transactionText);
-        g_strstrip(tmp);
-        gnc_utf8_strip_invalid(tmp);
-        gnc_description=tmp;
-    }
+        gnc_other_name = g_strdup(ab_remote_name);
 #else
         GWEN_StringList_ForEach(ab_remote_name, join_ab_strings_cb,
                                 &gnc_other_name);
@@ -368,13 +401,20 @@ gnc_ab_get_remote_name(const AB_TRANSACTION *ab_trans)
 gchar *
 gnc_ab_get_purpose(const AB_TRANSACTION *ab_trans, gboolean is_ofx)
 {
-    const GWEN_STRINGLIST *ab_purpose;
+#ifdef AQBANKING6
+#  if AQBANKING_VERSION_INT < 59929
+#    error "You are using an old beta version of aqbanking > 5.99.0 but < 5.99.29, please upgrade to the latest 5.99.29 or newer."
+#  endif
+#else
+    const /* only const in aqbanking < 5.99 */
+#endif
+            GWEN_STRINGLIST *ab_purpose;
     const char *ab_transactionText = NULL;
     gchar *gnc_description = NULL;
 
     g_return_val_if_fail(ab_trans, g_strdup(""));
 
-    if (!is_ofx && gnc_prefs_get_bool(GNC_PREFS_GROUP_AQBANKING, GNC_PREF_USE_TRANSACTION_TXT)) 
+    if (!is_ofx && gnc_prefs_get_bool(GNC_PREFS_GROUP_AQBANKING, GNC_PREF_USE_TRANSACTION_TXT))
     {
         /* According to AqBanking, some of the non-swift lines have a special
          * meaning. Some banks place valuable text into the transaction text,
@@ -384,10 +424,22 @@ gnc_ab_get_purpose(const AB_TRANSACTION *ab_trans, gboolean is_ofx)
             gnc_description = g_strdup(ab_transactionText);
     }
 
-    ab_purpose = AB_Transaction_GetPurpose(ab_trans);
+    ab_purpose =
+#ifdef AQBANKING6
+            /* With aqbanking-5.99.29, the identical function as before is now available under this new name. */
+            AB_Transaction_GetPurposeAsStringList
+#else
+            AB_Transaction_GetPurpose
+#endif
+            (ab_trans);
     if (ab_purpose)
         GWEN_StringList_ForEach(ab_purpose, join_ab_strings_cb,
                                 &gnc_description);
+
+#ifdef AQBANKING6
+    /* With aqbanking>=5.99, the return value must now be free'd */
+    GWEN_StringList_free(ab_purpose);
+#endif
 
     if (!gnc_description)
         gnc_description = g_strdup("");
@@ -616,9 +668,7 @@ gnc_ab_accinfo_to_gnc_acc(GtkWidget *parent, AB_IMEXPORTER_ACCOUNTINFO *acc_info
 
     bankcode = AB_ImExporterAccountInfo_GetBankCode(acc_info);
     accountnumber = AB_ImExporterAccountInfo_GetAccountNumber(acc_info);
-    online_id = g_strconcat(bankcode ? bankcode : "",
-                            accountnumber ? accountnumber : "",
-                            (gchar*)NULL);
+    online_id = gnc_ab_create_online_id(bankcode, accountnumber);
     gnc_acc = gnc_import_select_account(
                   parent, online_id, 1, AB_ImExporterAccountInfo_GetAccountName(acc_info),
                   NULL, ACCT_TYPE_NONE, NULL, NULL);
@@ -657,9 +707,7 @@ gnc_ab_txn_to_gnc_acc(GtkWidget *parent, const AB_TRANSACTION *transaction)
         return NULL;
     }
 
-    online_id = g_strconcat(bankcode ? bankcode : "",
-                            accountnumber ? accountnumber : "",
-                            (gchar*)NULL);
+    online_id = gnc_ab_create_online_id(bankcode, accountnumber);
     gnc_acc = gnc_import_select_account(
                   parent, online_id, 1, AB_Transaction_GetLocalName(transaction),
                   NULL, ACCT_TYPE_NONE, NULL, NULL);
@@ -717,7 +765,9 @@ txn_transaction_cb(const AB_TRANSACTION *element, gpointer user_data)
             /* trans_type = SINGLE_INTERNAL_TRANSFER;
              * break; */
         case AB_Transaction_TypeTransfer:
+#ifndef AQBANKING6
         case AB_Transaction_TypeEuTransfer:
+#endif
         default:
             trans_type = SEPA_TRANSFER;
             break;
@@ -754,7 +804,7 @@ txn_transaction_cb(const AB_TRANSACTION *element, gpointer user_data)
             gnc_gen_trans_list_add_trans_with_ref_id(data->generic_importer,
                                                      gnc_trans,
 #ifdef AQBANKING6
-                                                     AB_Transaction_GetUniqueId));
+                                                     AB_Transaction_GetUniqueId(job));
 #else
                                                      AB_Job_GetJobId(job));
 #endif
@@ -889,7 +939,7 @@ txn_accountinfo_cb(AB_IMEXPORTER_ACCOUNTINFO *element, gpointer user_data)
     if (!data->generic_importer)
     {
         data->generic_importer = gnc_gen_trans_list_new(data->parent, NULL,
-                                 TRUE, 14);
+                                 TRUE, 14, TRUE);
         if (data->execute_txns)
         {
             gnc_gen_trans_list_add_tp_cb(data->generic_importer,
@@ -899,11 +949,13 @@ txn_accountinfo_cb(AB_IMEXPORTER_ACCOUNTINFO *element, gpointer user_data)
 
     /* Iterate through all transactions */
 #ifdef AQBANKING6
-   ab_trans_list = AB_ImExporterAccountInfo_GetTransactionList(element);
-   if (ab_trans_list)
-       AB_Transaction_List_ForEachByType(ab_trans_list,
-                                         txn_transaction_cb, data,
-                                         AB_Transaction_TypeStatement, 0);
+    {
+        AB_TRANSACTION_LIST *ab_trans_list = AB_ImExporterAccountInfo_GetTransactionList(element);
+        if (ab_trans_list)
+            AB_Transaction_List_ForEachByType(ab_trans_list,
+                                              txn_transaction_cb, data,
+                                              AB_Transaction_TypeStatement, 0);
+    }
 #else
     AB_ImExporterAccountInfo_TransactionsForEach(element, txn_transaction_cb,
                                                  data);
@@ -916,8 +968,6 @@ bal_accountinfo_cb(AB_IMEXPORTER_ACCOUNTINFO *element, gpointer user_data)
 {
     GncABImExContextImport *data = user_data;
     Account *gnc_acc;
-    AB_ACCOUNT_STATUS *item, *best = NULL;
-    const GWEN_TIME *best_time = NULL;
     const AB_BALANCE *booked_bal, *noted_bal;
     const AB_VALUE *booked_val = NULL, *noted_val = NULL;
     gdouble booked_value, noted_value;
@@ -925,6 +975,9 @@ bal_accountinfo_cb(AB_IMEXPORTER_ACCOUNTINFO *element, gpointer user_data)
     time64 booked_tt = 0;
     GtkWidget *dialog;
     gboolean show_recn_window = FALSE;
+#ifndef AQBANKING6
+    AB_ACCOUNT_STATUS *best = NULL;
+#endif
 
     g_return_val_if_fail(element && data, NULL);
 
@@ -947,20 +1000,24 @@ bal_accountinfo_cb(AB_IMEXPORTER_ACCOUNTINFO *element, gpointer user_data)
     booked_bal=AB_Balance_List_GetLatestByType(AB_ImExporterAccountInfo_GetBalanceList(element),
                                                AB_Balance_TypeBooked);
 #else
-    /* Lookup the most recent ACCOUNT_STATUS available */
-    item = AB_ImExporterAccountInfo_GetFirstAccountStatus(element);
-    while (item)
     {
-        const GWEN_TIME *item_time = AB_AccountStatus_GetTime(item);
-        if (!best || GWEN_Time_Diff(best_time, item_time) < 0.0)
+        AB_ACCOUNT_STATUS *item = NULL;
+        const GWEN_TIME *best_time = NULL;
+        /* Lookup the most recent ACCOUNT_STATUS available */
+        item = AB_ImExporterAccountInfo_GetFirstAccountStatus(element);
+        while (item)
         {
-            best = item;
-            best_time = item_time;
+            const GWEN_TIME *item_time = AB_AccountStatus_GetTime(item);
+            if (!best || GWEN_Time_Diff(best_time, item_time) < 0.0)
+            {
+                best = item;
+                best_time = item_time;
+            }
+            item = AB_ImExporterAccountInfo_GetNextAccountStatus(element);
         }
-        item = AB_ImExporterAccountInfo_GetNextAccountStatus(element);
-    }
 
-    booked_bal = AB_AccountStatus_GetBookedBalance(best);
+        booked_bal = AB_AccountStatus_GetBookedBalance(best);
+    }
 #endif
 
     if (!(data->awaiting & AWAIT_BALANCES))
@@ -993,11 +1050,15 @@ bal_accountinfo_cb(AB_IMEXPORTER_ACCOUNTINFO *element, gpointer user_data)
     /* Lookup booked balance and time */
     if (booked_bal)
     {
+#ifdef AQBANKING6
+        const GWEN_DATE *ti = AB_Balance_GetDate(booked_bal);
+#else
         const GNC_GWEN_DATE *ti = AB_Balance_GetTime(booked_bal);
+#endif
         if (ti)
         {
 #ifdef AQBANKING6
-            time64 secs = GWEN_Date_toLocalTime_t(dt);
+            time64 secs = GWEN_Date_toLocalTime(ti);
 #else
             time64 secs = GWEN_Time_toTime_t(ti);
 #endif
@@ -1209,7 +1270,7 @@ gnc_ab_import_context(AB_IMEXPORTER_CONTEXT *context,
 #ifdef AQBANKING6
             bankmsg = AB_Message_List_Next(bankmsg);
 #else
-            bankmsg = AB_ImExporterContext_GetNextMessage(context); // The interator is incremented within aqbanking
+            bankmsg = AB_ImExporterContext_GetNextMessage(context); // The iterator is incremented within aqbanking
 #endif
         }
     }

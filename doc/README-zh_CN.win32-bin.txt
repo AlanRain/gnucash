@@ -6,9 +6,9 @@
 
 您可以获得支持的途径
 
-在线常见问题解答:    http://wiki.gnucash.org/wiki/FAQ
-邮件列表:  http://wiki.gnucash.org/wiki/Mailing_Lists
-IRC (聊天):   irc.gnome.org 服务器的 #gnucash 频道，另见 http://wiki.gnucash.org/wiki/IRC
+在线常见问题解答:    https://wiki.gnucash.org/wiki/FAQ
+邮件列表:  https://wiki.gnucash.org/wiki/Mailing_Lists
+IRC (聊天):   irc.gnome.org 服务器的 #gnucash 频道，另见 https://wiki.gnucash.org/wiki/IRC
 
 如果您遇到了任何 bug 或者问题，请不要犹豫，将它们报告到我们的 bug 跟踪工具“Bugzilla”：https://bugs.gnucash.org/enter_bug.cgi?product=GnuCash
 
@@ -32,10 +32,8 @@ IRC (聊天):   irc.gnome.org 服务器的 #gnucash 频道，另见 http://wiki.
 
 关于程序：
 
-GnuCash 是一个免费的、开放源代码的理财软件，它使用 GNU 通用公共许可证(GPL)。它是由横跨6个国家共12个开发人员共同合作开发而成。
+GnuCash 是一个免费的、开放源代码的理财软件，它使用 GNU 通用公共许可证(GPL)。它是由横跨6个国家共200+个开发人员共同合作开发而成。
 
 程序撰写开始于1997年，并且于1998年第一次发布。
 
 -------------------
-
-这是 GnuCash 2.2.x 用于 Windows 二进制发布包的自述文件。

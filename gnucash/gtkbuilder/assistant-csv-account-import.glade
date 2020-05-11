@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.20.4 -->
+<!-- Generated with glade 3.22.1 -->
 <interface>
   <requires lib="gtk+" version="3.10"/>
   <object class="GtkAdjustment" id="num_hrows_adj">
@@ -18,6 +18,9 @@
     <signal name="close" handler="csv_import_assistant_close" swapped="no"/>
     <signal name="prepare" handler="csv_import_assistant_prepare" swapped="no"/>
     <child>
+      <placeholder/>
+    </child>
+    <child>
       <object class="GtkBox" id="start_page">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
@@ -27,14 +30,14 @@
           <object class="GtkLabel" id="start_label">
             <property name="visible">True</property>
             <property name="can_focus">False</property>
-            <property name="label" translatable="yes">
+            <property name="label" translatable="yes" comments="Run the assistant in your language to see GTK's translation of the button labels.">
 This assistant will help you import Accounts from a file.
 
-The file must be in the same format as that exported as this is a fixed format import which can be seen by looking at a file created by using the 'Export Account Tree to CSV' export menu option.
+The file must be in the same format as that exported as this is a fixed format import which can be seen by looking at a file created by using the "Export Account Tree to CSV" export menu option.
 
 If the account is missing, based on the full account name, it will be added as long as the security / currency specified exists. If the account exists, then four fields will be updated. These are code, description, notes and color.
 
-Click on 'Forward' to proceed or 'Cancel' to Abort Import.
+Click on "Next" to proceed or "Cancel" to Abort Import.
 </property>
             <property name="justify">center</property>
             <property name="wrap">True</property>
@@ -73,9 +76,6 @@ Enter file name and location for the Import...
             <property name="fill">False</property>
             <property name="position">0</property>
           </packing>
-        </child>
-        <child>
-          <placeholder/>
         </child>
       </object>
       <packing>
@@ -122,9 +122,6 @@ Enter file name and location for the Import...
                 <property name="position">1</property>
               </packing>
             </child>
-            <child>
-              <placeholder/>
-            </child>
           </object>
           <packing>
             <property name="expand">False</property>
@@ -142,7 +139,8 @@ Enter file name and location for the Import...
               <object class="GtkGrid" id="table4">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
-                <property name="border_width">12</property>
+                <property name="border_width">6</property>
+                <property name="column_spacing">6</property>
                 <child>
                   <object class="GtkRadioButton" id="radio_comma">
                     <property name="label" translatable="yes">Comma Separated</property>
@@ -188,7 +186,7 @@ Enter file name and location for the Import...
                   </object>
                   <packing>
                     <property name="left_attach">0</property>
-                    <property name="top_attach">2</property>
+                    <property name="top_attach">1</property>
                   </packing>
                 </child>
                 <child>
@@ -206,15 +204,6 @@ Enter file name and location for the Import...
                     <property name="left_attach">2</property>
                     <property name="top_attach">0</property>
                   </packing>
-                </child>
-                <child>
-                  <placeholder/>
-                </child>
-                <child>
-                  <placeholder/>
-                </child>
-                <child>
-                  <placeholder/>
                 </child>
                 <child>
                   <placeholder/>
@@ -339,9 +328,6 @@ Cancel to abort.</property>
             <property name="position">1</property>
           </packing>
         </child>
-        <child>
-          <placeholder/>
-        </child>
       </object>
       <packing>
         <property name="page_type">summary</property>
@@ -350,10 +336,8 @@ Cancel to abort.</property>
         <property name="has_padding">False</property>
       </packing>
     </child>
-    <child internal-child="action_area">
-      <object class="GtkBox" id="assistant-action_area2">
-        <property name="can_focus">False</property>
-      </object>
+    <child>
+      <placeholder/>
     </child>
   </object>
 </interface>

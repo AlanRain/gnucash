@@ -301,7 +301,7 @@ struct GncTreeViewSplitRegPrivate
 #define SHOW_SYMBOL FALSE
 
 #define GNC_TREE_VIEW_SPLIT_REG_GET_PRIVATE(o)  \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_TREE_VIEW_SPLIT_REG, GncTreeViewSplitRegPrivate))
+   ((GncTreeViewSplitRegPrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_TREE_VIEW_SPLIT_REG))
 
 static GObjectClass *parent_class = NULL;
 
@@ -592,7 +592,7 @@ gnc_tree_view_split_reg_pref_changed (gpointer prefs, gchar *pref, gpointer user
 
 /* Define which columns are in which views */
 static ViewCol *
-gnc_tree_view_split_reg_get_colummn_list (GncTreeModelSplitReg *model)
+gnc_tree_view_split_reg_get_column_list (GncTreeModelSplitReg *model)
 {
     DEBUG("Model-type is %d", model->type);
 
@@ -865,7 +865,7 @@ gnc_tree_view_split_reg_set_format (GncTreeViewSplitReg *view)
 
             priv->expanded = FALSE;
 
-            LEAVE("#### Single line foramt ####");
+            LEAVE("#### Single line format ####");
         }
 
         if (model->use_double_line)
@@ -929,7 +929,7 @@ gnc_tree_view_split_reg_format_trans (GncTreeViewSplitReg *view, Transaction *tr
     {
         gtk_tree_view_collapse_row (GTK_TREE_VIEW (view), spath);
         priv->expanded = FALSE;
-        LEAVE("#### Single line transaction foramt ####");
+        LEAVE("#### Single line transaction format ####");
     }
 
     if ((model->use_double_line) && (model->style != REG2_STYLE_JOURNAL))
@@ -979,7 +979,7 @@ gnc_tree_view_split_reg_new_with_model (GncTreeModelSplitReg *model)
     GtkTreeSelection    *selection;
 
     view = g_object_new (gnc_tree_view_split_reg_get_type(), NULL);
-    g_object_set (view, "name", "split_reg_tree", NULL);
+    g_object_set (view, "name", "gnc-id-split-reg-tree", NULL);
 
     view->priv->anchor = gnc_tree_model_split_reg_get_anchor (model);
     view->priv->reg_comm = xaccAccountGetCommodity (view->priv->anchor);
@@ -989,7 +989,7 @@ gnc_tree_view_split_reg_new_with_model (GncTreeModelSplitReg *model)
     view->help_text = g_strdup ("Help Text");
 
     /* Set the grid lines to be solid */
-    gnc_widget_set_style_context (GTK_WIDGET(view), "register2_grid_lines");
+    gnc_widget_style_context_add_class (GTK_WIDGET(view), "gnc-class-register2-grid-lines");
 
     /* TreeView Grid lines */
     if (view->priv->use_horizontal_lines)
@@ -1024,7 +1024,7 @@ gnc_tree_view_split_reg_new_with_model (GncTreeModelSplitReg *model)
     gnc_tree_view_set_sort_user_data (GNC_TREE_VIEW (view), s_model);
 
     /* Set up the columns */
-    gnc_tree_view_split_reg_set_cols (view, model, gnc_tree_view_split_reg_get_colummn_list (model));
+    gnc_tree_view_split_reg_set_cols (view, model, gnc_tree_view_split_reg_get_column_list (model));
 
     PINFO("#### Before View connected to Model ####");
 
@@ -1454,7 +1454,7 @@ gtv_sr_cdf0 (GtkTreeViewColumn *col, GtkCellRenderer *cell, GtkTreeModel *s_mode
             //date on new transactions
             if (t == 0)
                 t = gnc_time (NULL);
-            qof_print_date_buff (datebuff, sizeof(datebuff), t);
+            qof_print_date_buff (datebuff, MAX_DATE_LENGTH, t);
             editable = TRUE;
         }
         else if (is_trow2 && show_extra_dates) {
@@ -1465,7 +1465,7 @@ gtv_sr_cdf0 (GtkTreeViewColumn *col, GtkCellRenderer *cell, GtkTreeModel *s_mode
             //date on new transactions
             if (t == 0)
                 t = gnc_time (NULL);
-            qof_print_date_buff (datebuff, sizeof(datebuff), t);
+            qof_print_date_buff (datebuff, MAX_DATE_LENGTH, t);
             editable = FALSE;
         }
         else if (is_split && show_extra_dates) {
@@ -1473,7 +1473,7 @@ gtv_sr_cdf0 (GtkTreeViewColumn *col, GtkCellRenderer *cell, GtkTreeModel *s_mode
             if (xaccSplitGetReconcile (split) == YREC)
             {
                 time64 t = xaccSplitGetDateReconciled (split);
-                qof_print_date_buff (datebuff, sizeof(datebuff), t);
+                qof_print_date_buff (datebuff, MAX_DATE_LENGTH, t);
             }
             editable = FALSE;
         }
@@ -1484,7 +1484,7 @@ gtv_sr_cdf0 (GtkTreeViewColumn *col, GtkCellRenderer *cell, GtkTreeModel *s_mode
         /* Is this a template */
         if (is_template && is_trow1)
         {
-            strncpy (datebuff,  _(" Scheduled "), sizeof(datebuff)-1);
+            strncpy (datebuff,  _(" Scheduled "), MAX_DATE_LENGTH);
             editable = FALSE;
         }
         else if (is_template && is_trow2 && show_extra_dates)
@@ -1498,7 +1498,7 @@ gtv_sr_cdf0 (GtkTreeViewColumn *col, GtkCellRenderer *cell, GtkTreeModel *s_mode
 
         editable = (read_only == TRUE) ? FALSE : editable;
 
-        /* This will remove the calander buttons if FALSE */
+        /* This will remove the calendar buttons if FALSE */
         g_object_set (cell, "use_buttons", view->priv->show_calendar_buttons, NULL );
         g_object_set (cell, "text", datebuff, "editable", editable, NULL);
         break;
@@ -1514,7 +1514,7 @@ gtv_sr_cdf0 (GtkTreeViewColumn *col, GtkCellRenderer *cell, GtkTreeModel *s_mode
             if (type == TXN_TYPE_INVOICE)
             {
                 time64 t = xaccTransRetDateDue (trans);
-                qof_print_date_buff (datebuff, sizeof(datebuff), t);
+                qof_print_date_buff (datebuff, MAX_DATE_LENGTH, t);
                 editable = FALSE;
             }
             else {
@@ -2450,7 +2450,7 @@ gtv_sr_begin_edit (GncTreeViewSplitReg *view, Transaction *trans)
             //is a new transaction and set the time to current time to show current
             //date on new transactions
             time = gnc_time (NULL);
-            xaccTransSetDatePostedSecs (trans, time);
+            xaccTransSetDatePostedSecsNormalized (trans, time);
         }
     }
     LEAVE(" ");
@@ -4491,7 +4491,7 @@ gtv_sr_edited_normal_cb (GtkCellRendererText *cell, const gchar *path_string,
             // Set the split parent trans
             xaccSplitSetParent (split, trans);
 
-            // If we are at trasaction level, column is value, split level is amount
+            // If we are at transaction level, column is value, split level is amount
             if (viewcol == COL_AMTVAL)
             {
                 gnc_tree_util_set_number_for_input (view, trans, split, input, COL_AMTVAL);

@@ -38,8 +38,13 @@
 #include <gnc-main-window.h>
 #include "dialog-options.h"
 
+/** Initialize the gnome-utils library
+ *  Should be run once before using any gnome-utils features.
+ */
+void gnc_gnome_utils_init (void);
+
 /** Load a gtk resource configuration file to customize gtk
- *  appearance and behviour.
+ *  appearance and behaviour.
  */
 void gnc_add_css_file (void);
 

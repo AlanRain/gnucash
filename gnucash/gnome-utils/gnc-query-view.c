@@ -53,7 +53,7 @@ struct _GNCQueryViewPrivate
 };
 
 #define GNC_QUERY_VIEW_GET_PRIVATE(o)  \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_QUERY_VIEW, GNCQueryViewPrivate))
+   ((GNCQueryViewPrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_QUERY_VIEW))
 
 /** Static Globals ****************************************************/
 static GtkTreeViewClass *parent_class = NULL;
@@ -191,8 +191,8 @@ gnc_query_view_init (GNCQueryView *qview)
 {
     GNCQueryViewPrivate *priv;
 
-    // Set the style context for this dialog so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(qview), "GncQueryView");
+    // Set the name for this widget so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(qview), "gnc-id-query-view");
 
     qview->query = NULL;
 

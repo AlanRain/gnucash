@@ -179,6 +179,12 @@ TEST(gncnumeric_constructors, test_string_constructor)
                  std::out_of_range);
     EXPECT_THROW(GncNumeric bad_string("Four score and seven"),
                  std::invalid_argument);
+    GncNumeric neg_decimal_frac("-0.12345");
+    EXPECT_EQ(-12345, neg_decimal_frac.num());
+    EXPECT_EQ(100000, neg_decimal_frac.denom());
+    GncNumeric neg_decimal_frac_nozero("-.12345");
+    EXPECT_EQ(-12345, neg_decimal_frac_nozero.num());
+    EXPECT_EQ(100000, neg_decimal_frac_nozero.denom());
 }
 
 TEST(gncnumeric_output, string_output)
@@ -411,7 +417,7 @@ TEST(gncnumeric_functions, test_convert)
     EXPECT_EQ(3465453, c.num());
     EXPECT_EQ(128, c.denom());
     ASSERT_NO_THROW(c = b.convert<RoundType::floor>(128));
-    EXPECT_EQ(-3465452, c.num());
+    EXPECT_EQ(-3465454, c.num());
     EXPECT_EQ(128, c.denom());
     ASSERT_NO_THROW(c = a.convert<RoundType::ceiling>(128));
     EXPECT_EQ(3465454, c.num());

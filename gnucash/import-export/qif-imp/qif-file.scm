@@ -26,7 +26,7 @@
 
 
 (use-modules (gnucash core-utils))
-(use-modules (gnucash import-export string))
+(use-modules (gnucash string))
 (use-modules (ice-9 regex))
 (use-modules (srfi srfi-13))
 (use-modules (ice-9 rdelim))
@@ -569,7 +569,7 @@
     (if (or (and (not acct-name)
                  (not security)
                  payee (string? payee)
-                 (string=? (string-remove-trailing-space payee)
+                 (string=? (string-trim-right payee)
                            "Opening Balance")
                  cat-is-acct?)
             (and acct-name (string? acct-name)

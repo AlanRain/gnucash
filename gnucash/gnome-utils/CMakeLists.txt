@@ -5,7 +5,7 @@ add_subdirectory(test)
 # Command to generate the swig-gnome-utils.c wrapper file
 gnc_add_swig_guile_command (swig-gnome-utils-c
     SWIG_GNOME_UTILS_C swig-gnome-utils.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/gnome-utils.i
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnome-utils.i ""
 )
 
 set (WARNINGS_SCHEMA ${DATADIR_BUILD}/glib-2.0/schemas/org.gnucash.warnings.gschema.xml)
@@ -24,15 +24,6 @@ add_custom_command(
   COMMAND
     ${LIBXSLT_XSLTPROC_EXECUTABLE} -o ${GNC_WARNINGS_H} ${CMAKE_CURRENT_SOURCE_DIR}/make-gnc-warnings-h.xsl ${WARNINGS_SCHEMA}
 )
-
-#GTK before 3.14 didn't have GDK_MODIFIER_INTENT_DEFAULT_MOD_MASK
-if (NOT have_mod_mask)
-if (MAC_INTEGRATION)
-  add_definitions(-DGDK_MODIFIER_INTENT_DEFAULT_MOD_MASK=GDK_SHIFT_MASK|GDK_CONTROL_MASK|GDK_MOD1_MASK|GDK_MOD2_MASK|GDK_SUPER_MASK|GDK_HYPER_MASK|GDK_META_MASK)
-else (MAC_INTEGRATION)
-  add_definitions(-DGDK_MODIFIER_INTENT_DEFAULT_MOD_MASK=GDK_SHIFT_MASK|GDK_CONTROL_MASK|GDK_MOD1_MASK|GDK_SUPER_MASK|GDK_HYPER_MASK|GDK_META_MASK)
-endif (MAC_INTEGRATION)
-endif (NOT have_mod_mask)
 
 set (gnome_utils_SOURCES
   account-quickfill.c
@@ -59,8 +50,12 @@ set (gnome_utils_SOURCES
   gnc-cell-renderer-date.c
   gnc-cell-renderer-popup.c
   gnc-cell-renderer-popup-entry.c
+  gnc-cell-renderer-text-flag.c
+  gnc-cell-renderer-text-view.c
+  gnc-cell-view.c
   gnc-combott.c
   gnc-commodity-edit.c
+  gnc-component-manager.c
   gnc-currency-edit.c
   gnc-date-delta.c
   gnc-date-edit.c
@@ -109,7 +104,6 @@ set (gnome_utils_SOURCES
   gnc-tree-view-sx-list.c
   gnc-tree-view.c
   gnc-window.c
-  gncmod-gnome-utils.c
   misc-gnome-utils.c
   tree-view-utils.c
   search-param.c
@@ -146,8 +140,12 @@ set (gnome_utils_HEADERS
   gnc-cell-renderer-date.h
   gnc-cell-renderer-popup.h
   gnc-cell-renderer-popup-entry.h
+  gnc-cell-renderer-text-flag.h
+  gnc-cell-renderer-text-view.h
+  gnc-cell-view.h
   gnc-combott.h
   gnc-commodity-edit.h
+  gnc-component-manager.h
   gnc-currency-edit.h
   gnc-date-delta.h
   gnc-date-edit.h
@@ -203,7 +201,7 @@ set (gnome_utils_HEADERS
 
 
 
-add_library (gncmod-gnome-utils
+add_library (gnc-gnome-utils
   ${gnome_utils_SOURCES}
   ${gnome_utils_HEADERS}
   ${GNC_WARNINGS_C} ${GNC_WARNINGS_H}
@@ -211,25 +209,31 @@ add_library (gncmod-gnome-utils
   ${gnome_utils_noinst_HEADERS}
 )
 
-target_link_libraries(gncmod-gnome-utils gncmod-app-utils gncmod-engine gnc-backend-xml-utils
-     ${CMAKE_DL_LIBS} ${GTK3_LDFLAGS} ${LIBSECRET_LDFLAGS} ${GTK_MAC_LDFLAGS})
+target_link_libraries(gnc-gnome-utils
+    gnc-app-utils
+    gnc-engine
+    gnc-backend-xml-utils
+    gnucash-guile
+    PkgConfig::GTK3
+    ${CMAKE_DL_LIBS}
+    ${LIBSECRET_LDFLAGS}
+    ${GTK_MAC_LDFLAGS})
 
-target_compile_options(gncmod-gnome-utils PRIVATE -Wno-deprecated-declarations)
-target_compile_definitions(gncmod-gnome-utils PUBLIC ${GTK_MAC_CFLAGS_OTHER}
+target_compile_options(gnc-gnome-utils PRIVATE -Wno-deprecated-declarations)
+target_compile_definitions(gnc-gnome-utils PUBLIC ${GTK_MAC_CFLAGS_OTHER}
   PRIVATE -DG_LOG_DOMAIN=\"gnc.gui\")
 
 if (BUILDING_FROM_VCS)
-  target_compile_definitions(gncmod-gnome-utils PRIVATE -DGNC_VCS=\"git\")
-endif (BUILDING_FROM_VCS)
+  target_compile_definitions(gnc-gnome-utils PRIVATE -DGNC_VCS=\"git\")
+endif()
 
 if (MAC_INTEGRATION)
-  target_compile_options(gncmod-gnome-utils PRIVATE ${OSX_EXTRA_COMPILE_FLAGS})
-  target_link_libraries(gncmod-gnome-utils ${OSX_EXTRA_LIBRARIES})
-endif(MAC_INTEGRATION)
+  target_compile_options(gnc-gnome-utils PRIVATE ${OSX_EXTRA_COMPILE_FLAGS})
+  target_link_libraries(gnc-gnome-utils ${OSX_EXTRA_LIBRARIES})
+endif()
 
-target_include_directories(gncmod-gnome-utils
+target_include_directories(gnc-gnome-utils
     PUBLIC
-      ${GTK3_INCLUDE_DIRS}
       ${CMAKE_CURRENT_SOURCE_DIR}
     PRIVATE
       ${GTK_MAC_INCLUDE_DIRS}
@@ -239,10 +243,10 @@ target_include_directories(gncmod-gnome-utils
 
 
 if (APPLE)
-  set_target_properties (gncmod-gnome-utils PROPERTIES INSTALL_NAME_DIR "${CMAKE_INSTALL_FULL_LIBDIR}/gnucash")
+  set_target_properties (gnc-gnome-utils PROPERTIES INSTALL_NAME_DIR "${CMAKE_INSTALL_FULL_LIBDIR}/gnucash")
 endif()
 
-install(TARGETS gncmod-gnome-utils
+install(TARGETS gnc-gnome-utils
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/gnucash
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/gnucash
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
@@ -252,22 +256,19 @@ install(FILES ${gnome_utils_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gnu
 
 # Scheme
 
-set(GUILE_DEPENDS      gncmod-gnome-utils scm-gnc-module scm-scm scm-app-utils)
+set(GUILE_DEPENDS      gnc-gnome-utils scm-engine scm-app-utils)
 
 gnc_add_scheme_targets(scm-gnome-utils-1
-  gnome-utils.scm
-  gnucash
-  "${GUILE_DEPENDS}"
-  FALSE
-)
+    SOURCES gnome-utils.scm
+    OUTPUT_DIR gnucash
+    DEPENDS "${GUILE_DEPENDS}")
 
 
 gnc_add_scheme_targets(scm-gnome-utils-2
-  gnc-menu-extensions.scm
-  ""
-  "${GUILE_DEPENDS}"
-  FALSE
-)
+    SOURCES gnc-menu-extensions.scm
+    OUTPUT_DIR "gnucash/gnome-utils"
+    DEPENDS "${GUILE_DEPENDS}"
+    MAKE_LINKS)
 
 add_custom_target(scm-gnome-utils ALL DEPENDS scm-gnome-utils-2 scm-gnome-utils-1)
 

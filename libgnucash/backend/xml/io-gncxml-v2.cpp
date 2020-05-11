@@ -853,6 +853,9 @@ qof_session_load_from_xml_file_v2_full (
     gnc_account_foreach_descendant (root,
                                     (AccountCb) xaccAccountCommitEdit,
                                     NULL);
+    gnc_account_foreach_descendant (gnc_book_get_template_root (book),
+                                    (AccountCb) xaccAccountCommitEdit,
+                                    NULL);
 
     /* start logging again */
     xaccLogEnable ();
@@ -980,31 +983,6 @@ static gboolean
 write_book (FILE* out, QofBook* book, sixtp_gdv2* gd)
 {
     struct file_backend be_data;
-
-#ifdef IMPLEMENT_BOOK_DOM_TREES_LATER
-    /* We can't just blast out the dom tree, because the dom tree
-     * doesn't have the books, transactions, etc underneath it.
-     * But that is just as well, since I think the performance
-     * will be much better if we write out as we go along
-     */
-    xmlNodePtr node;
-
-    node = gnc_book_dom_tree_create (book);
-
-    if (!node)
-    {
-        return FALSE;
-    }
-
-    xmlElemDump (out, NULL, node);
-    xmlFreeNode (node);
-
-    if (ferror (out) || fprintf (out, "\n") < 0)
-    {
-        return FALSE;
-    }
-
-#endif
 
     be_data.out = out;
     be_data.book = book;
@@ -1623,8 +1601,7 @@ gnc_book_write_to_xml_file_v2 (
 
     /* Try to write as much as possible */
     if (!out
-        || !gnc_book_write_to_xml_filehandle_v2 (book, out)
-        || !write_emacs_trailer (out))
+        || !gnc_book_write_to_xml_filehandle_v2 (book, out))
         success = FALSE;
 
     /* Close the output stream */
@@ -1655,8 +1632,7 @@ gnc_book_write_accounts_to_xml_file_v2 (QofBackend* qof_be, QofBook* book,
 
     /* Try to write as much as possible */
     if (!out
-        || !gnc_book_write_accounts_to_xml_filehandle_v2 (qof_be, book, out)
-        || !write_emacs_trailer (out))
+        || !gnc_book_write_accounts_to_xml_filehandle_v2 (qof_be, book, out))
         success = FALSE;
 
     /* Close the output stream */
@@ -2175,7 +2151,7 @@ gnc_xml2_parse_with_subst (GncXmlBackend* xml_be, QofBook* book, GHashTable* sub
                   xml_be, book, (sixtp_push_handler) parse_with_subst_push_handler,
                   push_data, GNC_BOOK_XML2_FILE);
     g_free (push_data);
-    
+
     if (success)
         qof_instance_set_dirty (QOF_INSTANCE (book));
 

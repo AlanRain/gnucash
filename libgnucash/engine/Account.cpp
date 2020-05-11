@@ -25,6 +25,10 @@
 
 #include <config.h>
 
+extern "C" {
+#include "gnc-prefs.h"
+}
+
 #include <glib.h>
 #include <glib/gi18n.h>
 #include <stdlib.h>
@@ -44,6 +48,7 @@
 #include "guid.hpp"
 
 #include <numeric>
+#include <map>
 
 static QofLogModule log_module = GNC_MOD_ACCOUNT;
 
@@ -62,6 +67,8 @@ static const std::string AB_ACCOUNT_ID("account-id");
 static const std::string AB_ACCOUNT_UID("account-uid");
 static const std::string AB_BANK_CODE("bank-code");
 static const std::string AB_TRANS_RETRIEVAL("trans-retrieval");
+
+static gnc_numeric GetBalanceAsOfDate (Account *acc, time64 date, gboolean ignclosing);
 
 using FinalProbabilityVec=std::vector<std::pair<std::string, int32_t>>;
 using ProbabilityVec=std::vector<std::pair<std::string, struct AccountProbability>>;
@@ -88,6 +95,7 @@ enum
     PROP_COMMODITY_SCU,                 /* Table */
     PROP_NON_STD_SCU,                   /* Table */
     PROP_END_BALANCE,                   /* Constructed */
+    PROP_END_NOCLOSING_BALANCE,         /* Constructed */
     PROP_END_CLEARED_BALANCE,           /* Constructed */
     PROP_END_RECONCILED_BALANCE,        /* Constructed */
 
@@ -116,12 +124,53 @@ enum
     PROP_SORT_DIRTY,                    /* Runtime Value */
     PROP_BALANCE_DIRTY,                 /* Runtime Value */
     PROP_START_BALANCE,                 /* Runtime Value */
+    PROP_START_NOCLOSING_BALANCE,       /* Runtime Value */
     PROP_START_CLEARED_BALANCE,         /* Runtime Value */
     PROP_START_RECONCILED_BALANCE,      /* Runtime Value */
 };
 
 #define GET_PRIVATE(o)  \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_ACCOUNT, AccountPrivate))
+    ((AccountPrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_ACCOUNT))
+
+/* This map contains a set of strings representing the different column types. */
+std::map<GNCAccountType, const char*> gnc_acct_debit_strs = {
+    { ACCT_TYPE_NONE,       _("Funds In") },
+    { ACCT_TYPE_BANK,       _("Deposit") },
+    { ACCT_TYPE_CASH,       _("Receive") },
+    { ACCT_TYPE_CREDIT,     _("Payment") },
+    { ACCT_TYPE_ASSET,      _("Increase") },
+    { ACCT_TYPE_LIABILITY,  _("Decrease") },
+    { ACCT_TYPE_STOCK,      _("Buy") },
+    { ACCT_TYPE_MUTUAL,     _("Buy") },
+    { ACCT_TYPE_CURRENCY,   _("Buy") },
+    { ACCT_TYPE_INCOME,     _("Charge") },
+    { ACCT_TYPE_EXPENSE,    _("Expense") },
+    { ACCT_TYPE_PAYABLE,    _("Payment") },
+    { ACCT_TYPE_RECEIVABLE, _("Invoice") },
+    { ACCT_TYPE_TRADING,    _("Decrease") },
+    { ACCT_TYPE_EQUITY,     _("Decrease") },
+};
+const char* dflt_acct_debit_str = _("Debit");
+
+/* This map contains a set of strings representing the different column types. */
+std::map<GNCAccountType, const char*> gnc_acct_credit_strs = {
+    { ACCT_TYPE_NONE,       _("Funds Out") },
+    { ACCT_TYPE_BANK,       _("Withdrawal") },
+    { ACCT_TYPE_CASH,       _("Spend") },
+    { ACCT_TYPE_CREDIT,     _("Charge") },
+    { ACCT_TYPE_ASSET,      _("Decrease") },
+    { ACCT_TYPE_LIABILITY,  _("Increase") },
+    { ACCT_TYPE_STOCK,      _("Sell") },
+    { ACCT_TYPE_MUTUAL,     _("Sell") },
+    { ACCT_TYPE_CURRENCY,   _("Sell") },
+    { ACCT_TYPE_INCOME,     _("Income") },
+    { ACCT_TYPE_EXPENSE,    _("Rebate") },
+    { ACCT_TYPE_PAYABLE,    _("Bill") },
+    { ACCT_TYPE_RECEIVABLE, _("Payment") },
+    { ACCT_TYPE_TRADING,    _("Increase") },
+    { ACCT_TYPE_EQUITY,     _("Increase") },
+};
+const char* dflt_acct_credit_str = _("Credit");
 
 /********************************************************************\
  * Because I can't use C++ for this project, doesn't mean that I    *
@@ -241,7 +290,7 @@ GList *gnc_account_list_name_violations (QofBook *book, const gchar *separator)
 /********************************************************************\
 \********************************************************************/
 
-G_INLINE_FUNC void mark_account (Account *acc);
+static inline void mark_account (Account *acc);
 void
 mark_account (Account *acc)
 {
@@ -279,9 +328,11 @@ gnc_account_init(Account* acc)
     priv->non_standard_scu = FALSE;
 
     priv->balance = gnc_numeric_zero();
+    priv->noclosing_balance = gnc_numeric_zero();
     priv->cleared_balance = gnc_numeric_zero();
     priv->reconciled_balance = gnc_numeric_zero();
     priv->starting_balance = gnc_numeric_zero();
+    priv->starting_noclosing_balance = gnc_numeric_zero();
     priv->starting_cleared_balance = gnc_numeric_zero();
     priv->starting_reconciled_balance = gnc_numeric_zero();
     priv->balance_dirty = FALSE;
@@ -364,6 +415,9 @@ gnc_account_get_property (GObject         *object,
     case PROP_START_BALANCE:
         g_value_set_boxed(value, &priv->starting_balance);
         break;
+    case PROP_START_NOCLOSING_BALANCE:
+        g_value_set_boxed(value, &priv->starting_noclosing_balance);
+        break;
     case PROP_START_CLEARED_BALANCE:
         g_value_set_boxed(value, &priv->starting_cleared_balance);
         break;
@@ -372,6 +426,9 @@ gnc_account_get_property (GObject         *object,
         break;
     case PROP_END_BALANCE:
         g_value_set_boxed(value, &priv->balance);
+        break;
+    case PROP_END_NOCLOSING_BALANCE:
+        g_value_set_boxed(value, &priv->noclosing_balance);
         break;
     case PROP_END_CLEARED_BALANCE:
         g_value_set_boxed(value, &priv->cleared_balance);
@@ -748,6 +805,23 @@ gnc_account_class_init (AccountClass *klass)
 
     g_object_class_install_property
     (gobject_class,
+     PROP_START_NOCLOSING_BALANCE,
+     g_param_spec_boxed("start-noclosing-balance",
+                        "Starting No-closing Balance",
+                        "The starting balance for the account, ignoring closing."
+                        "This parameter is intended for use with backends "
+                        "that do not return the complete list of splits "
+                        "for an account, but rather return a partial "
+                        "list.  In such a case, the backend will "
+                        "typically return all of the splits after "
+                        "some certain date, and the 'starting noclosing "
+                        "balance' will represent the summation of the "
+                        "splits up to that date, ignoring closing splits.",
+                        GNC_TYPE_NUMERIC,
+                        static_cast<GParamFlags>(G_PARAM_READWRITE)));
+
+    g_object_class_install_property
+    (gobject_class,
      PROP_START_CLEARED_BALANCE,
      g_param_spec_boxed("start-cleared-balance",
                         "Starting Cleared Balance",
@@ -788,6 +862,18 @@ gnc_account_class_init (AccountClass *klass)
                         "This is the current ending balance for the "
                         "account.  It is computed from the sum of the "
                         "starting balance and all splits in the account.",
+                        GNC_TYPE_NUMERIC,
+                        G_PARAM_READABLE));
+
+    g_object_class_install_property
+    (gobject_class,
+     PROP_END_NOCLOSING_BALANCE,
+     g_param_spec_boxed("end-noclosing-balance",
+                        "Ending Account Noclosing Balance",
+                        "This is the current ending no-closing balance for "
+                        "the account.  It is computed from the sum of the "
+                        "starting balance and all cleared splits in the "
+                        "account.",
                         GNC_TYPE_NUMERIC,
                         G_PARAM_READABLE));
 
@@ -1066,7 +1152,7 @@ gnc_book_get_root_account (QofBook *book)
     if (!book) return NULL;
     col = qof_book_get_collection (book, GNC_ID_ROOT_ACCOUNT);
     root = gnc_coll_get_root_account (col);
-    if (root == NULL)
+    if (root == NULL && !qof_book_shutting_down(book))
         root = gnc_account_create_root(book);
     return root;
 }
@@ -1269,6 +1355,7 @@ xaccFreeAccount (Account *acc)
     priv->children = nullptr;
 
     priv->balance  = gnc_numeric_zero();
+    priv->noclosing_balance = gnc_numeric_zero();
     priv->cleared_balance = gnc_numeric_zero();
     priv->reconciled_balance = gnc_numeric_zero();
 
@@ -1565,6 +1652,22 @@ xaccAccountEqual(const Account *aa, const Account *ab, gboolean check_guids)
         return FALSE;
     }
 
+    if (!gnc_numeric_equal(priv_aa->starting_noclosing_balance,
+                           priv_ab->starting_noclosing_balance))
+    {
+        char *str_a;
+        char *str_b;
+
+        str_a = gnc_numeric_to_string(priv_aa->starting_noclosing_balance);
+        str_b = gnc_numeric_to_string(priv_ab->starting_noclosing_balance);
+
+        PWARN ("starting noclosing balances differ: %s vs %s", str_a, str_b);
+
+        g_free (str_a);
+        g_free (str_b);
+
+        return FALSE;
+    }
     if (!gnc_numeric_equal(priv_aa->starting_cleared_balance,
                            priv_ab->starting_cleared_balance))
     {
@@ -1615,6 +1718,21 @@ xaccAccountEqual(const Account *aa, const Account *ab, gboolean check_guids)
         return FALSE;
     }
 
+    if (!gnc_numeric_equal(priv_aa->noclosing_balance, priv_ab->noclosing_balance))
+    {
+        char *str_a;
+        char *str_b;
+
+        str_a = gnc_numeric_to_string(priv_aa->noclosing_balance);
+        str_b = gnc_numeric_to_string(priv_ab->noclosing_balance);
+
+        PWARN ("noclosing balances differ: %s vs %s", str_a, str_b);
+
+        g_free (str_a);
+        g_free (str_b);
+
+        return FALSE;
+    }
     if (!gnc_numeric_equal(priv_aa->cleared_balance, priv_ab->cleared_balance))
     {
         char *str_a;
@@ -2070,6 +2188,7 @@ xaccAccountRecomputeBalance (Account * acc)
 {
     AccountPrivate *priv;
     gnc_numeric  balance;
+    gnc_numeric  noclosing_balance;
     gnc_numeric  cleared_balance;
     gnc_numeric  reconciled_balance;
     GList *lp;
@@ -2083,6 +2202,7 @@ xaccAccountRecomputeBalance (Account * acc)
     if (qof_book_shutting_down(qof_instance_get_book(acc))) return;
 
     balance            = priv->starting_balance;
+    noclosing_balance  = priv->starting_noclosing_balance;
     cleared_balance    = priv->starting_cleared_balance;
     reconciled_balance = priv->starting_reconciled_balance;
 
@@ -2107,13 +2227,18 @@ xaccAccountRecomputeBalance (Account * acc)
                 gnc_numeric_add_fixed(reconciled_balance, amt);
         }
 
+        if (!(xaccTransGetIsClosingTxn (split->parent)))
+            noclosing_balance = gnc_numeric_add_fixed(noclosing_balance, amt);
+
         split->balance = balance;
+        split->noclosing_balance = noclosing_balance;
         split->cleared_balance = cleared_balance;
         split->reconciled_balance = reconciled_balance;
 
     }
 
     priv->balance = balance;
+    priv->noclosing_balance = noclosing_balance;
     priv->cleared_balance = cleared_balance;
     priv->reconciled_balance = reconciled_balance;
     priv->balance_dirty = FALSE;
@@ -2158,18 +2283,6 @@ xaccAccountOrder (const Account *aa, const Account *ab)
     /* sort on accountCode strings */
     da = priv_aa->accountCode;
     db = priv_ab->accountCode;
-
-    /* If accountCodes are both base 36 integers do an integer sort */
-    la = strtoul (da, &endptr, 36);
-    if ((*da != '\0') && (*endptr == '\0'))
-    {
-        lb = strtoul (db, &endptr, 36);
-        if ((*db != '\0') && (*endptr == '\0'))
-        {
-            if (la < lb) return -1;
-            if (la > lb) return +1;
-        }
-    }
 
     /* Otherwise do a string sort */
     result = g_strcmp0 (da, db);
@@ -3287,8 +3400,8 @@ xaccAccountGetProjectedMinimumBalance (const Account *acc)
 /********************************************************************\
 \********************************************************************/
 
-gnc_numeric
-xaccAccountGetBalanceAsOfDate (Account *acc, time64 date)
+static gnc_numeric
+GetBalanceAsOfDate (Account *acc, time64 date, gboolean ignclosing)
 {
     /* Ideally this could use xaccAccountForEachSplit, but
      * it doesn't exist yet and I'm uncertain of exactly how
@@ -3296,80 +3409,69 @@ xaccAccountGetBalanceAsOfDate (Account *acc, time64 date)
      * xaccAccountForEachTransaction by using gpointer return
      * values rather than gints.
      */
-    AccountPrivate *priv;
-    GList   *lp;
-    gboolean found = FALSE;
-    gnc_numeric balance;
+    Split *latest = nullptr;
 
     g_return_val_if_fail(GNC_IS_ACCOUNT(acc), gnc_numeric_zero());
 
     xaccAccountSortSplits (acc, TRUE); /* just in case, normally a noop */
     xaccAccountRecomputeBalance (acc); /* just in case, normally a noop */
 
-    priv = GET_PRIVATE(acc);
-    balance = priv->balance;
-
-    lp = priv->splits;
-    while ( lp && !found )
+    for (GList *lp = GET_PRIVATE(acc)->splits; lp; lp = lp->next)
     {
-        time64 trans_time = xaccTransRetDatePosted( xaccSplitGetParent( (Split *)lp->data ));
-        if ( trans_time >= date )
-            found = TRUE;
-        else
-            lp = lp->next;
+        if (xaccTransGetDate (xaccSplitGetParent ((Split *)lp->data)) >= date)
+            break;
+        latest = (Split *)lp->data;
     }
 
-    if ( lp )
+    if (!latest)
+        return gnc_numeric_zero();
+
+    if (ignclosing)
+        return xaccSplitGetNoclosingBalance (latest);
+    else
+        return xaccSplitGetBalance (latest);
+}
+
+gnc_numeric
+xaccAccountGetBalanceAsOfDate (Account *acc, time64 date)
+{
+    return GetBalanceAsOfDate (acc, date, FALSE);
+}
+
+static gnc_numeric
+xaccAccountGetNoclosingBalanceAsOfDate (Account *acc, time64 date)
+{
+    return GetBalanceAsOfDate (acc, date, TRUE);
+}
+
+gnc_numeric
+xaccAccountGetReconciledBalanceAsOfDate (Account *acc, time64 date)
+{
+    gnc_numeric balance = gnc_numeric_zero();
+
+    g_return_val_if_fail(GNC_IS_ACCOUNT(acc), gnc_numeric_zero());
+
+    for (GList *node = GET_PRIVATE(acc)->splits; node; node = node->next)
     {
-        if ( lp->prev )
-        {
-            /* Since lp is now pointing to a split which was past the reconcile
-             * date, get the running balance of the previous split.
-             */
-            balance = xaccSplitGetBalance( (Split *)lp->prev->data );
-        }
-        else
-        {
-            /* AsOf date must be before any entries, return zero. */
-            balance = gnc_numeric_zero();
-        }
-    }
+        Split *split = (Split*) node->data;
+        if ((xaccSplitGetReconcile (split) == YREC) &&
+            (xaccSplitGetDateReconciled (split) <= date))
+            balance = gnc_numeric_add_fixed (balance, xaccSplitGetAmount (split));
+    };
 
-    /* Otherwise there were no splits posted after the given date,
-     * so the latest account balance should be good enough.
-     */
-
-    return( balance );
+    return balance;
 }
 
 /*
  * Originally gsr_account_present_balance in gnc-split-reg.c
- *
- * How does this routine compare to xaccAccountGetBalanceAsOfDate just
- * above?  These two routines should eventually be collapsed into one.
- * Perhaps the startup logic from that one, and the logic from this
- * one that walks from the tail of the split list.
  */
 gnc_numeric
 xaccAccountGetPresentBalance (const Account *acc)
 {
-    AccountPrivate *priv;
-    GList *node;
-    time64 today;
-
     g_return_val_if_fail(GNC_IS_ACCOUNT(acc), gnc_numeric_zero());
 
-    priv = GET_PRIVATE(acc);
-    today = gnc_time64_get_today_end();
-    for (node = g_list_last(priv->splits); node; node = node->prev)
-    {
-        Split *split = static_cast<Split*>(node->data);
-
-        if (xaccTransGetDate (xaccSplitGetParent (split)) <= today)
-            return xaccSplitGetBalance (split);
-    }
-
-    return gnc_numeric_zero ();
+    return xaccAccountGetBalanceAsOfDate (GNC_ACCOUNT (acc),
+                                          gnc_time64_get_today_end ());
 }
 
 
@@ -3670,6 +3772,16 @@ xaccAccountGetBalanceAsOfDateInCurrency(
 }
 
 gnc_numeric
+xaccAccountGetNoclosingBalanceAsOfDateInCurrency(
+    Account *acc, time64 date, gnc_commodity *report_commodity,
+    gboolean include_children)
+{
+    return xaccAccountGetXxxBalanceAsOfDateInCurrencyRecursive
+      (acc, date, xaccAccountGetNoclosingBalanceAsOfDate,
+       report_commodity, include_children);
+}
+
+gnc_numeric
 xaccAccountGetBalanceChangeForPeriod (Account *acc, time64 t1, time64 t2,
                                       gboolean recurse)
 {
@@ -3677,6 +3789,17 @@ xaccAccountGetBalanceChangeForPeriod (Account *acc, time64 t1, time64 t2,
 
     b1 = xaccAccountGetBalanceAsOfDateInCurrency(acc, t1, NULL, recurse);
     b2 = xaccAccountGetBalanceAsOfDateInCurrency(acc, t2, NULL, recurse);
+    return gnc_numeric_sub(b2, b1, GNC_DENOM_AUTO, GNC_HOW_DENOM_FIXED);
+}
+
+gnc_numeric
+xaccAccountGetNoclosingBalanceChangeForPeriod (Account *acc, time64 t1,
+                                               time64 t2, gboolean recurse)
+{
+    gnc_numeric b1, b2;
+
+    b1 = xaccAccountGetNoclosingBalanceAsOfDateInCurrency(acc, t1, NULL, recurse);
+    b2 = xaccAccountGetNoclosingBalanceAsOfDateInCurrency(acc, t2, NULL, recurse);
     return gnc_numeric_sub(b2, b1, GNC_DENOM_AUTO, GNC_HOW_DENOM_FIXED);
 }
 
@@ -3903,6 +4026,34 @@ xaccAccountSetTaxUSCopyNumber (Account *acc, gint64 copy_number)
     }
     mark_account (acc);
     xaccAccountCommitEdit (acc);
+}
+
+/*********************************************************************\
+\ ********************************************************************/
+
+
+const char *gnc_account_get_debit_string (GNCAccountType acct_type)
+{
+    if (gnc_prefs_get_bool(GNC_PREFS_GROUP_GENERAL, GNC_PREF_ACCOUNTING_LABELS))
+        return dflt_acct_debit_str;
+
+    auto result = gnc_acct_debit_strs.find(acct_type);
+    if (result != gnc_acct_debit_strs.end())
+        return result->second;
+    else
+        return dflt_acct_debit_str;
+}
+
+const char *gnc_account_get_credit_string (GNCAccountType acct_type)
+{
+    if (gnc_prefs_get_bool(GNC_PREFS_GROUP_GENERAL, GNC_PREF_ACCOUNTING_LABELS))
+        return dflt_acct_credit_str;
+
+    auto result = gnc_acct_credit_strs.find(acct_type);
+    if (result != gnc_acct_credit_strs.end())
+        return result->second;
+    else
+        return dflt_acct_credit_str;
 }
 
 /********************************************************************\
@@ -4237,6 +4388,39 @@ gboolean xaccAccountIsAssetLiabType(GNCAccountType t)
     default:
         return (xaccAccountTypesCompatible(ACCT_TYPE_ASSET, t)
                 || xaccAccountTypesCompatible(ACCT_TYPE_LIABILITY, t));
+    }
+}
+
+GNCAccountType
+xaccAccountTypeGetFundamental (GNCAccountType t)
+{
+    switch (t)
+    {
+        case ACCT_TYPE_BANK:
+        case ACCT_TYPE_STOCK:
+        case ACCT_TYPE_MONEYMRKT:
+        case ACCT_TYPE_CHECKING:
+        case ACCT_TYPE_SAVINGS:
+        case ACCT_TYPE_MUTUAL:
+        case ACCT_TYPE_CURRENCY:
+        case ACCT_TYPE_CASH:
+        case ACCT_TYPE_ASSET:
+        case ACCT_TYPE_RECEIVABLE:
+            return ACCT_TYPE_ASSET;
+        case ACCT_TYPE_CREDIT:
+        case ACCT_TYPE_LIABILITY:
+        case ACCT_TYPE_PAYABLE:
+        case ACCT_TYPE_CREDITLINE:
+            return ACCT_TYPE_LIABILITY;
+        case ACCT_TYPE_INCOME:
+            return ACCT_TYPE_INCOME;
+        case ACCT_TYPE_EXPENSE:
+            return ACCT_TYPE_EXPENSE;
+        case ACCT_TYPE_EQUITY:
+            return ACCT_TYPE_EQUITY;
+        case ACCT_TYPE_TRADING:
+        default:
+            return ACCT_TYPE_NONE;
     }
 }
 
@@ -5172,15 +5356,14 @@ struct AccountInfo
 };
 
 static void
-build_token_info(char const * key, KvpValue * value, TokenAccountsInfo & tokenInfo)
+build_token_info(char const * suffix, KvpValue * value, TokenAccountsInfo & tokenInfo)
 {
-    tokenInfo.total_count += value->get<int64_t>();
-    AccountTokenCount this_account;
-    std::string account_guid {key};
-    /*By convention, the key ends with the account GUID.*/
-    this_account.account_guid = account_guid.substr(account_guid.size() - GUID_ENCODING_LENGTH);
-    this_account.token_count = value->get<int64_t>();
-    tokenInfo.accounts.push_back(this_account);
+    if (strlen(suffix) == GUID_ENCODING_LENGTH)
+    {
+        tokenInfo.total_count += value->get<int64_t>();
+        /*By convention, the key ends with the account GUID.*/
+        tokenInfo.accounts.emplace_back(AccountTokenCount{std::string{suffix}, value->get<int64_t>()});
+    }
 }
 
 /** We scale the probability values by probability_factor.
@@ -5225,7 +5408,7 @@ get_first_pass_probabilities(GncImportMatchMap * imap, GList * tokens)
     for (auto current_token = tokens; current_token; current_token = current_token->next)
     {
         TokenAccountsInfo tokenInfo{};
-        auto path = std::string{IMAP_FRAME_BAYES "/"} + static_cast <char const *> (current_token->data);
+        auto path = std::string{IMAP_FRAME_BAYES "/"} + static_cast <char const *> (current_token->data) + "/";
         qof_instance_foreach_slot_prefix (QOF_INSTANCE (imap->acc), path, &build_token_info, tokenInfo);
         for (auto const & current_account_token : tokenInfo.accounts)
         {
@@ -5558,38 +5741,27 @@ build_non_bayes (const char *key, const GValue *value, gpointer user_data)
     g_free (guid_string);
 }
 
-static std::tuple<std::string, std::string, std::string>
-parse_bayes_imap_info (std::string const & imap_bayes_entry)
-{
-    auto header_length = strlen (IMAP_FRAME_BAYES);
-    std::string header {imap_bayes_entry.substr (0, header_length)};
-    auto guid_start = imap_bayes_entry.size() - GUID_ENCODING_LENGTH;
-    std::string keyword {imap_bayes_entry.substr (header_length + 1, guid_start - header_length - 2)};
-    std::string account_guid {imap_bayes_entry.substr (guid_start)};
-    return std::tuple <std::string, std::string, std::string> {header, keyword, account_guid};
-}
-
 static void
-build_bayes (const char *key, KvpValue * value, GncImapInfo & imapInfo)
+build_bayes (const char *suffix, KvpValue * value, GncImapInfo & imapInfo)
 {
-    auto parsed_key = parse_bayes_imap_info (key);
+    size_t guid_start = strlen(suffix) - GUID_ENCODING_LENGTH;
+    std::string account_guid {&suffix[guid_start]};
     GncGUID guid;
     try
     {
-        auto temp_guid = gnc::GUID::from_string (std::get <2> (parsed_key));
-        guid = temp_guid;
+        guid = gnc::GUID::from_string (account_guid);
     }
     catch (const gnc::guid_syntax_exception& err)
     {
-        PWARN("Invalid GUID string from %s", key);
+        PWARN("Invalid GUID string from %s%s", IMAP_FRAME_BAYES, suffix);
     }
     auto map_account = xaccAccountLookup (&guid, gnc_account_get_book (imapInfo.source_account));
     auto imap_node = static_cast <GncImapInfo*> (g_malloc (sizeof (GncImapInfo)));
     auto count = value->get <int64_t> ();
     imap_node->source_account = imapInfo.source_account;
     imap_node->map_account = map_account;
-    imap_node->head = g_strdup (key);
-    imap_node->match_string = g_strdup (std::get <1> (parsed_key).c_str ());
+    imap_node->head = g_strdup_printf ("%s%s", IMAP_FRAME_BAYES, suffix);
+    imap_node->match_string = g_strndup (&suffix[1], guid_start - 2);
     imap_node->category = g_strdup(" ");
     imap_node->count = g_strdup_printf ("%" G_GINT64_FORMAT, count);
     imapInfo.list = g_list_prepend (imapInfo.list, imap_node);
@@ -5634,11 +5806,13 @@ gnc_account_imap_get_info (Account *acc, const char *category)
 /*******************************************************************************/
 
 gchar *
-gnc_account_get_map_entry (Account *acc, const char *full_category)
+gnc_account_get_map_entry (Account *acc, const char *head, const char *category)
 {
     GValue v = G_VALUE_INIT;
     gchar *text = NULL;
-    std::vector<std::string> path {full_category};
+    std::vector<std::string> path {head};
+    if (category)
+        path.emplace_back (category);
     if (qof_instance_has_path_slot (QOF_INSTANCE (acc), path))
     {
         qof_instance_get_path_kvp (QOF_INSTANCE (acc), &v, path);
@@ -5701,6 +5875,8 @@ static void
 gnc_account_book_end(QofBook* book)
 {
     Account *root_account = gnc_book_get_root_account(book);
+    if (!root_account)
+        return;
     xaccAccountBeginEdit(root_account);
     xaccAccountDestroy(root_account);
 }

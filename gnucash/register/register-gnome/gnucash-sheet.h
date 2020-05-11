@@ -102,7 +102,7 @@ void gnucash_sheet_update_adjustments (GnucashSheet *sheet);
 void gnucash_sheet_set_window (GnucashSheet *sheet, GtkWidget *window);
 
 void gnucash_get_style_classes (GnucashSheet *sheet, GtkStyleContext *stylectxt,
-                                RegisterColor field_type);
+                                RegisterColor field_type, gboolean use_neg_class);
 
 void gnucash_sheet_set_text_bounds (GnucashSheet *sheet, GdkRectangle *rect,
                                     gint x, gint y, gint width, gint height);
@@ -111,6 +111,8 @@ gint gnucash_sheet_get_text_offset (GnucashSheet *sheet, const VirtualLocation v
                                     gint rect_width, gint logical_width);
 
 gboolean gnucash_sheet_is_read_only (GnucashSheet *sheet);
+
+void gnucash_sheet_set_has_focus (GnucashSheet *sheet, gboolean has_focus);
 
 /** @} */
 #endif

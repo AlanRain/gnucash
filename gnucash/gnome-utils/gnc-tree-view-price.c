@@ -58,7 +58,7 @@ typedef struct GncTreeViewPricePrivate
 } GncTreeViewPricePrivate;
 
 #define GNC_TREE_VIEW_PRICE_GET_PRIVATE(o)  \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_TREE_VIEW_PRICE, GncTreeViewPricePrivate))
+   ((GncTreeViewPricePrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_TREE_VIEW_PRICE))
 
 
 /************************************************************/
@@ -382,7 +382,7 @@ gnc_tree_view_price_new (QofBook *book,
 
     /* Create our view */
     view = g_object_new (GNC_TYPE_TREE_VIEW_PRICE,
-                         "name", "price_tree", NULL);
+                         "name", "gnc-id-price-tree", NULL);
     gtk_tree_view_set_model (GTK_TREE_VIEW (view), s_model);
     g_object_unref(G_OBJECT(s_model));
 
@@ -766,7 +766,7 @@ get_selected_prices_helper (GtkTreeModel *s_model,
 }
 
 /*
- * Given an price tree view, return a list of the selected commodities. The
+ * Given a price tree view, return a list of the selected prices. The
  * price tree must be in multiple selection mode.
  *
  * Note: It is the responsibility of the caller to free the returned
@@ -780,5 +780,49 @@ gnc_tree_view_price_get_selected_prices (GncTreeViewPrice *view)
 
     selection = gtk_tree_view_get_selection (GTK_TREE_VIEW(view));
     gtk_tree_selection_selected_foreach(selection, get_selected_prices_helper, &return_list);
+    return return_list;
+}
+
+static void
+get_selected_commodity_helper (GtkTreeModel *s_model,
+                               GtkTreePath *s_path,
+                               GtkTreeIter *s_iter,
+                               gpointer data)
+{
+    GList **return_list = data;
+    GtkTreeModel *model, *f_model;
+    GtkTreeIter iter, f_iter;
+    gnc_commodity *commodity;
+
+    gtk_tree_model_sort_convert_iter_to_child_iter (GTK_TREE_MODEL_SORT (s_model),
+            &f_iter, s_iter);
+
+    f_model = gtk_tree_model_sort_get_model(GTK_TREE_MODEL_SORT(s_model));
+    gtk_tree_model_filter_convert_iter_to_child_iter (GTK_TREE_MODEL_FILTER (f_model),
+            &iter, &f_iter);
+
+    model = gtk_tree_model_filter_get_model(GTK_TREE_MODEL_FILTER(f_model));
+    commodity = gnc_tree_model_price_get_commodity (GNC_TREE_MODEL_PRICE(model), &iter);
+
+    if (commodity)
+        *return_list = g_list_append(*return_list, commodity);
+}
+
+/*
+ * Given a price tree view, return a list of the selected rows that have
+ * commodities but are not prices, the parent rows for prices. The
+ * price tree must be in multiple selection mode.
+ *
+ * Note: It is the responsibility of the caller to free the returned
+ * list.
+ */
+GList *
+gnc_tree_view_price_get_selected_commodities (GncTreeViewPrice *view)
+{
+    GtkTreeSelection *selection;
+    GList *return_list = NULL;
+
+    selection = gtk_tree_view_get_selection (GTK_TREE_VIEW(view));
+    gtk_tree_selection_selected_foreach (selection, get_selected_commodity_helper, &return_list);
     return return_list;
 }

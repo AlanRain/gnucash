@@ -19,14 +19,17 @@
 
 (define-module (gnucash gnome-utils))
 
-(use-modules (gnucash utilities)) 
-(use-modules (gnucash gnc-module))
+(use-modules (gnucash engine))
+(use-modules (gnucash utilities))
+(use-modules (gnucash app-utils))
 
-(eval-when
-      (compile load eval expand)
-      (load-extension "libgncmod-gnome-utils" "scm_init_sw_gnome_utils_module"))
+(eval-when (compile load eval expand)
+  (load-extension "libgnc-gnome-utils" "scm_init_sw_gnome_utils_module"))
 (use-modules (sw_gnome_utils))
-(gnc:module-load "gnucash/app-utils" 0)
+
+; Export the swig-wrapped symbols in the public interface of this module
+(let ((i (module-public-interface (current-module))))
+     (module-use! i (resolve-interface '(sw_gnome_utils))))
 
 ;; from gnc-menu-extensions.scm
 (export gnc:extension-type)
@@ -39,7 +42,7 @@
 (export gnc:make-menu)
 (export gnc:make-separator)
 
-(load-from-path "gnc-menu-extensions")
+(load-from-path "gnucash/gnome-utils/gnc-menu-extensions")
 
 ;; this function will receive 1 boolean argument, and can be used for
 ;; any UI init/shutdown routines. For now it will set the

@@ -98,8 +98,8 @@ static gboolean autosave_confirm(GtkWidget *toplevel)
                                "%s",
                                _("Save file automatically?"));
 
-    // Set the style context for this dialog so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(dialog), "GncAutoSaveDialog");
+    // Set the name for this dialog so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(dialog), "gnc-id-auto-save");
 
     gtk_message_dialog_format_secondary_text
     (GTK_MESSAGE_DIALOG(dialog),
@@ -107,13 +107,13 @@ static gboolean autosave_confirm(GtkWidget *toplevel)
               "GnuCash has a feature to save the file automatically every %d minute, "
               "just as if you had pressed the \"Save\" button each time. \n\n"
               "You can change the time interval or turn off this feature under "
-              "Edit -> Preferences -> General -> Auto-save time interval. \n\n"
+              "Edit->Preferences->General->Auto-save time interval. \n\n"
               "Should your file be saved automatically?",
               "Your data file needs to be saved to your hard disk to save your changes. "
               "GnuCash has a feature to save the file automatically every %d minutes, "
               "just as if you had pressed the \"Save\" button each time. \n\n"
               "You can change the time interval or turn off this feature under "
-              "Edit -> Preferences -> General -> Auto-save time interval. \n\n"
+              "Edit->Preferences->General->Auto-save time interval. \n\n"
               "Should your file be saved automatically?",
               interval_mins),
      interval_mins);

@@ -126,6 +126,8 @@ gnc_ui_find_transactions_dialog_create(GtkWindow *parent, GNCLedgerDisplay * ori
         params = gnc_search_param_prepend (params, N_("Date Posted"), NULL,
                                            type, SPLIT_TRANS, TRANS_DATE_POSTED,
                                            NULL);
+        params = gnc_search_param_prepend (params, N_("Reconciled Date"), NULL,
+                                           type, SPLIT_DATE_RECONCILED, NULL);
         params = gnc_search_param_prepend (params, (num_action
                                                     ? N_("Number/Action")
                                                     : N_("Action")), NULL,
@@ -228,7 +230,7 @@ gnc_ui_find_transactions_dialog_create(GtkWindow *parent, GNCLedgerDisplay * ori
                                         params, NULL, start_q, show_q,
                                         NULL, do_find_cb, NULL,
                                         ftd, free_ftd_cb, GNC_PREFS_GROUP_SEARCH, NULL,
-                                        "GncFindTransDialog");
+                                        "gnc-class-transactions");
     if (!ftd->sw)
     {
         free_ftd_cb (ftd);

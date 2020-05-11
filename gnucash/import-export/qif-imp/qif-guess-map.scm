@@ -25,6 +25,7 @@
 
 
 (use-modules (srfi srfi-13))
+(use-modules (ice-9 match))
 
 (define GNC-BANK-TYPE 0)
 (define GNC-CASH-TYPE 1)
@@ -39,6 +40,14 @@
 (define GNC-RECEIVABLE-TYPE 11)
 (define GNC-PAYABLE-TYPE 12)
 
+(define (record-fields->list record)
+  (let ((type (record-type-descriptor record)))
+    (map
+     (lambda (field) ((record-accessor type field) record))
+     (record-type-fields type))))
+
+(define (list->record-fields lst type)
+  (apply (record-constructor type) lst))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  qif-import:load-map-prefs
@@ -176,13 +185,14 @@
 ;;  of bogus accounts if you have funny stuff in your map.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (qif-import:write-map hashtab)
+(define (qif-import:write-map hashtab port)
   (let ((table '()))
-    (hash-fold
-     (lambda (key value p)
-       (set! table (cons (cons key (simple-obj-to-list value)) table))
-       #f) #f hashtab)
-    (write table)))
+    (hash-for-each
+     (lambda (key value)
+       (set! table
+         (cons (cons key (record-fields->list value)) table)))
+     hashtab)
+    (write table port)))
 
 (define (qif-import:read-map tablist tab-sep)
   (let* ((table (make-hash-table 20))
@@ -192,7 +202,7 @@
     (for-each
      (lambda (entry)
        (let ((key (car entry))
-             (value (simple-obj-from-list (cdr entry) <qif-map-entry>)))
+             (value (list->record-fields (cdr entry) <qif-map-entry>)))
 
          ;; If the account separator has changed, fix the account name.
          (if changed-sep?
@@ -218,24 +228,21 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (qif-import:read-securities security-list)
-  (let ((table (make-hash-table 20)))
+  (let ((table (make-hash-table))
+        (comm-table (gnc-commodity-table-get-table (gnc-get-current-book))))
     (for-each
-     (lambda (entry)
-       (if (and (list? entry)
-                (= 3 (length entry)))
-           ;; The saved information about each security mapping is a
-           ;; list of three items: the QIF name, and the GnuCash
-           ;; namespace and mnemonic (symbol) to which it maps.
-           ;; Example: ("McDonald's" "NYSE" "MCD")
-           (let ((commodity (gnc-commodity-table-lookup
-                              (gnc-commodity-table-get-table
-                                (gnc-get-current-book))
-                              (cadr entry)
-                              (caddr entry))))
-             (if (and commodity (not (null? commodity)))
-                 ;; There is an existing GnuCash commodity for this
-                 ;; combination of namespace and symbol.
-                 (hash-set! table (car entry) commodity)))))
+     (match-lambda
+       ((name ns mnemonic)
+        ;; The saved information about each security mapping is a
+        ;; list of three items: the QIF name, and the GnuCash
+        ;; namespace and mnemonic (symbol) to which it maps.
+        ;; Example: ("McDonald's" "NYSE" "MCD")
+        (let ((commodity (gnc-commodity-table-lookup comm-table ns mnemonic)))
+          (if (and commodity (not (null? commodity)))
+              ;; There is an existing GnuCash commodity for this
+              ;; combination of namespace and symbol.
+              (hash-set! table name commodity))))
+       (_ #f))
      security-list)
     table))
 
@@ -247,34 +254,29 @@
 ;;  GnuCash commodity namespaces and mnemonics (symbols).
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (qif-import:write-securities security-hash security-prefs)
+(define (qif-import:write-securities security-hash security-prefs port)
   (let ((table '()))
     ;; For each security that has been paired with an existing
     ;; GnuCash commodity, create a list containing the QIF name
     ;; and the commodity's namespace and mnemonic (symbol).
-    (hash-fold
-      (lambda (key value p)
-        ;;FIXME: we used to type-check the values, like:
-        ;; (gw:wcp-is-of-type? <gnc:commodity*> value)
-        (if (and value #t)
-            (set! table (cons (list key
-                                   (gnc-commodity-get-namespace value)
-                                   (gnc-commodity-get-mnemonic value))
-                              table))
-            (gnc:warn "qif-import:write-securities:"
-                      " something funny in hash table."))
-        #f)
-      #f security-hash)
+    (hash-for-each
+     (lambda (key value)
+       (set! table
+         (cons (list key
+                     (gnc-commodity-get-namespace value)
+                     (gnc-commodity-get-mnemonic value))
+               table)))
+     security-hash)
 
     ;; Add on the rest of the saved security mapping preferences.
     (for-each
-      (lambda (m)
-        (if (not (hash-ref security-hash (car m)))
-            (set! table (cons m table))))
-      security-prefs)
+     (lambda (m)
+       (if (not (hash-ref security-hash (car m)))
+           (set! table (cons m table))))
+     security-prefs)
 
     ;; Write out the mappings.
-    (write table)))
+    (write table port)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -293,38 +295,38 @@
 
   ;; This procedure does all the work. We'll define it, then call it safely.
   (define (private-save)
-    (with-output-to-file (gnc-build-userdata-path "qif-accounts-map")
-      (lambda ()
-        (display ";;; qif-accounts-map")
-        (newline)
-        (display ";;; Automatically generated by GnuCash. DO NOT EDIT.")
-        (newline)
-        (display ";;; (Unless you really, really want to.)")
-        (newline)
-        (display ";;; Map QIF accounts to GnuCash accounts")
-        (newline)
-        (qif-import:write-map acct-map)
-        (newline)
+    (call-with-output-file (gnc-build-userdata-path "qif-accounts-map")
+      (lambda (port)
+        (display ";;; qif-accounts-map" port)
+        (newline port)
+        (display ";;; Automatically generated by GnuCash. DO NOT EDIT." port)
+        (newline port)
+        (display ";;; (Unless you really, really want to.)" port)
+        (newline port)
+        (display ";;; Map QIF accounts to GnuCash accounts" port)
+        (newline port)
+        (qif-import:write-map acct-map port)
+        (newline port)
 
-        (display ";;; Map QIF categories to GnuCash accounts")
-        (newline)
-        (qif-import:write-map cat-map)
-        (newline)
+        (display ";;; Map QIF categories to GnuCash accounts" port)
+        (newline port)
+        (qif-import:write-map cat-map port)
+        (newline port)
 
-        (display ";;; Map QIF payee/memo to GnuCash accounts")
-        (newline)
-        (qif-import:write-map memo-map)
-        (newline)
+        (display ";;; Map QIF payee/memo to GnuCash accounts" port)
+        (newline port)
+        (qif-import:write-map memo-map port)
+        (newline port)
 
-        (display ";;; Map QIF security names to GnuCash commodities")
-        (newline)
-        (qif-import:write-securities security-map security-prefs)
-        (newline)
+        (display ";;; Map QIF security names to GnuCash commodities" port)
+        (newline port)
+        (qif-import:write-securities security-map security-prefs port)
+        (newline port)
 
-        (display ";;; GnuCash separator used in these mappings")
-        (newline)
-        (write (gnc-get-account-separator-string))
-        (newline)))
+        (display ";;; GnuCash separator used in these mappings" port)
+        (newline port)
+        (write (gnc-get-account-separator-string) port)
+        (newline port)))
     #t)
 
   ;; Safely save the file.
@@ -458,18 +460,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (qif-import:find-new-acct qif-acct allowed-types gnc-acct-info)
-  (cond ((and (string? qif-acct)
-              (string=? qif-acct (default-equity-account)))
-         (let ((existing-equity
-                (qif-import:find-similar-acct (default-equity-account)
-                                              (list GNC-EQUITY-TYPE)
-                                              gnc-acct-info)))
-           (if existing-equity
-               existing-equity
-               (list (default-equity-account) (list GNC-EQUITY-TYPE)))))
-        ((and (string? qif-acct)
-              (not (string=? qif-acct "")))
-         (list qif-acct allowed-types))
-        (#t
-         (list (default-unspec-acct) allowed-types))))
+  (cond
+   ((equal? qif-acct (default-equity-account))
+    (or (qif-import:find-similar-acct
+         (default-equity-account) (list GNC-EQUITY-TYPE) gnc-acct-info)
+        (list (default-equity-account) (list GNC-EQUITY-TYPE))))
+   ((equal? qif-acct "") (list (default-unspec-acct) allowed-types))
+   (else (list qif-acct allowed-types))))
 

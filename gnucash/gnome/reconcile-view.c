@@ -150,11 +150,7 @@ gnc_reconcile_view_tooltip_cb (GNCQueryView *qview, gint x, gint y,
 
             if (keyboard_mode == FALSE)
             {
-#if GTK_CHECK_VERSION(3,20,0)
                 GdkSeat *seat;
-#else
-                GdkDeviceManager *device_manager;
-#endif
                 GdkDevice *pointer;
                 GtkWindow *tip_win = NULL;
                 GdkWindow *parent_window;
@@ -162,13 +158,9 @@ gnc_reconcile_view_tooltip_cb (GNCQueryView *qview, gint x, gint y,
 
                 parent_window = gtk_widget_get_parent_window (GTK_WIDGET (qview));
 
-#if GTK_CHECK_VERSION(3,20,0)
                 seat = gdk_display_get_default_seat (gdk_window_get_display (parent_window));
                 pointer = gdk_seat_get_pointer (seat);
-#else
-                device_manager = gdk_display_get_device_manager (gdk_window_get_display (parent_window));
-                pointer = gdk_device_manager_get_client_pointer (device_manager);
-#endif
+
                 gdk_window_get_device_position (parent_window, pointer, &cur_x, &cur_y, NULL);
 
                 gdk_window_get_origin (parent_window, &root_x, &root_y);
@@ -189,12 +181,7 @@ gnc_reconcile_view_tooltip_cb (GNCQueryView *qview, gint x, gint y,
 
                 if (GTK_IS_WINDOW (tip_win))
                 {
-#if GTK_CHECK_VERSION(3,22,0)
                     GdkMonitor *mon;
-#else
-                    GdkScreen *screen;
-                    gint monitor_num;
-#endif
                     GdkRectangle monitor;
                     GtkRequisition requisition;
                     gint x, y;
@@ -204,14 +191,9 @@ gnc_reconcile_view_tooltip_cb (GNCQueryView *qview, gint x, gint y,
                     x = root_x + cur_x + 10;
                     y = root_y + cur_y + 10;
 
-#if GTK_CHECK_VERSION(3,22,0)
-                    mon = gdk_display_get_monitor_at_point (gdk_display_get_default(), x, y);
+                    mon = gdk_display_get_monitor_at_point (gdk_window_get_display (parent_window), x, y);
                     gdk_monitor_get_geometry (mon, &monitor);
-#else
-                    screen = gtk_widget_get_screen (GTK_WIDGET (qview));
-                    monitor_num = gdk_screen_get_monitor_at_point (screen, x, y);
-                    gdk_screen_get_monitor_geometry (screen, monitor_num, &monitor);
-#endif
+
                     if (x + requisition.width > monitor.x + monitor.width)
                         x -= x - (monitor.x + monitor.width) + requisition.width;
                     else if (x < monitor.x)
@@ -422,7 +404,7 @@ gnc_reconcile_view_init (GNCReconcileView *view)
     param = gnc_search_param_simple_new();
     gnc_search_param_set_param_fcn (param, QOF_TYPE_BOOLEAN,
                                     gnc_reconcile_view_is_reconciled, view);
-    gnc_search_param_set_title ((GNCSearchParam *) param, _("Reconciled:R") + 11);
+    gnc_search_param_set_title ((GNCSearchParam *) param, C_("Column header for 'Reconciled'", "R"));
     gnc_search_param_set_justify ((GNCSearchParam *) param, GTK_JUSTIFY_CENTER);
     gnc_search_param_set_passive ((GNCSearchParam *) param, FALSE);
     gnc_search_param_set_non_resizeable ((GNCSearchParam *) param, TRUE);
@@ -519,92 +501,12 @@ gnc_reconcile_view_toggle_split (GNCReconcileView *view, Split *split)
 
 
 static void
-gnc_reconcile_view_toggle_children (Account *account, GNCReconcileView *view, Split *split)
-{
-    GList       *child_accounts, *node;
-    Transaction *transaction;
-
-    /*
-     * Need to get all splits in this transaction and identify any that are
-     * in the same hierarchy as the account being reconciled (not necessarily
-     * the account this split is from.)
-     *
-     * For each of these splits toggle them all to the same state.
-     */
-    child_accounts = gnc_account_get_descendants (account);
-    child_accounts = g_list_prepend (child_accounts, account);
-    transaction = xaccSplitGetParent (split);
-    for (node = xaccTransGetSplitList (transaction); node; node = node->next)
-    {
-        Split *other_split;
-        Account *other_account;
-        GNCReconcileView *current_view;
-
-        GtkTreeModel *model;
-        GtkTreeIter   iter;
-        gboolean      valid;
-        gpointer      pointer;
-
-        other_split = node->data;
-        other_account = xaccSplitGetAccount (other_split);
-        if (other_split == split)
-            continue;
-        /* Check this 'other' account in in the same hierarchy */
-        if (!g_list_find (child_accounts, other_account))
-            continue;
-        /* Search our sibling view for this split first.  We search the
-         * sibling list first because that it where it is most likely to be.
-         */
-        current_view = view->sibling;
-        if (!gnc_query_view_item_in_view (GNC_QUERY_VIEW (current_view), other_split))
-        {
-            /* Not in the sibling view, try this view */
-            current_view = view;
-            if (!gnc_query_view_item_in_view (GNC_QUERY_VIEW (current_view), other_split))
-                /* We can't find it, nothing more I can do about it */
-                continue;
-        }
-
-        /* Found the other split. Toggle the reconciled check mark in the view... */
-        model = gtk_tree_view_get_model (GTK_TREE_VIEW (current_view));
-        valid = gtk_tree_model_get_iter_first (model, &iter);
-
-        while (valid)
-        {
-            // Walk through the list, reading each row
-            gtk_tree_model_get (model, &iter, REC_POINTER, &pointer, -1);
-
-            if(pointer == other_split)
-            {
-                gboolean toggled;
-                gtk_tree_model_get (model, &iter, REC_RECN, &toggled, -1);
-                gtk_list_store_set (GTK_LIST_STORE (model), &iter, REC_RECN, !toggled, -1);
-                break;
-            }
-
-            valid = gtk_tree_model_iter_next (model, &iter);
-        }
-
-        /* ...and toggle its reconciled state in the internal hash */
-        gnc_reconcile_view_toggle_split (current_view, other_split);
-    }
-    g_list_free (child_accounts);
-}
-
-
-static void
 gnc_reconcile_view_toggle (GNCReconcileView *view, Split *split)
 {
-    gboolean include_children;
-
     g_return_if_fail (GNC_IS_RECONCILE_VIEW (view));
     g_return_if_fail (view->reconciled != NULL);
 
     gnc_reconcile_view_toggle_split (view, split);
-
-    include_children = xaccAccountGetReconcileChildrenStatus (view->account);
-    if (include_children)
-        gnc_reconcile_view_toggle_children (view->account, view, split);
 
     g_signal_emit (G_OBJECT (view),
                    reconcile_view_signals[TOGGLE_RECONCILED], 0, split);
@@ -864,12 +766,26 @@ void
 gnc_reconcile_view_refresh (GNCReconcileView *view)
 {
     GNCQueryView *qview;
+    GtkTreeSelection *selection;
+    GList *path_list, *node;
 
     g_return_if_fail (view != NULL);
     g_return_if_fail (GNC_IS_RECONCILE_VIEW (view));
 
     qview = GNC_QUERY_VIEW (view);
     gnc_query_view_refresh (qview);
+
+    /* Ensure last selected split, if any, can be seen */
+    selection = gtk_tree_view_get_selection (GTK_TREE_VIEW (qview));
+    path_list = gtk_tree_selection_get_selected_rows (selection, NULL);
+    node = g_list_last (path_list);
+    if (node)
+    {
+        GtkTreePath *tree_path = node->data;
+        gtk_tree_view_scroll_to_cell (GTK_TREE_VIEW (qview),
+                                      tree_path, NULL, FALSE, 0.0, 0.0);
+    }
+    g_list_free_full (path_list, (GDestroyNotify) gtk_tree_path_free);
 
     /* Now verify that everything in the reconcile hash is still in qview */
     if (view->reconciled)

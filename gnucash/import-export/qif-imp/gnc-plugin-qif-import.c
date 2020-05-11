@@ -26,6 +26,7 @@
 #include <gtk/gtk.h>
 #include <glib/gi18n.h>
 
+#include "dialog-new-user.h"
 #include "dialog-preferences.h"
 #include "assistant-qif-import.h"
 #include "gnc-plugin-manager.h"
@@ -59,7 +60,7 @@ typedef struct GncPluginQifImportPrivate
 G_DEFINE_TYPE_WITH_PRIVATE(GncPluginQifImport, gnc_plugin_qif_import, GNC_TYPE_PLUGIN);
 
 #define GNC_PLUGIN_QIF_IMPORT_GET_PRIVATE(o)  \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_PLUGIN_QIF_IMPORT, GncPluginQifImportPrivate))
+   ((GncPluginQifImportPrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_PLUGIN_QIF_IMPORT))
 
 static GObjectClass *parent_class = NULL;
 
@@ -128,8 +129,13 @@ gnc_plugin_qif_import_create_plugin (void)
     GncPlugin *plugin = gnc_plugin_qif_import_new ();
     gnc_plugin_manager_add_plugin (gnc_plugin_manager_get (), plugin);
 
+    gnc_new_user_dialog_register_qif_assistant
+        ((void (*)())gnc_file_qif_import);
+
+    scm_c_use_module("gnucash qif-import");
+
     /* Add to preferences under Online Banking */
     /* The parameters are; glade file, items to add from glade file - last being the dialog, preference tab name */
     gnc_preferences_add_to_page ("dialog-account-picker.glade", "prefs_table",
-                                 _("Online Banking"));
+                                 _("Import"));
 }

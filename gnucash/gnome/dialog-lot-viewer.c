@@ -317,7 +317,7 @@ lv_select_row (GNCLotViewer *lv,
 }
 
 /* ======================================================================== */
-/* Un-select a row the the lot list */
+/* Un-select a row of the lot list */
 
 static void
 lv_unselect_row (GNCLotViewer *lv)
@@ -990,8 +990,8 @@ lv_create (GNCLotViewer *lv, GtkWindow *parent)
 
     gtk_window_set_transient_for (GTK_WINDOW (lv->window), parent);
 
-    // Set the style context for this dialog so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(lv->window), "GncLotViewerDialog");
+    // Set the name for this dialog so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(lv->window), "gnc-id-lot-viewer");
 
     win_title = g_strdup_printf (_("Lots in Account %s"),
                                  xaccAccountGetName(lv->account));

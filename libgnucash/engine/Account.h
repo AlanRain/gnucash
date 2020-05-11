@@ -558,6 +558,9 @@ gnc_numeric xaccAccountGetProjectedMinimumBalance (const Account *account);
 gnc_numeric xaccAccountGetBalanceAsOfDate (Account *account,
         time64 date);
 
+/** Get the reconciled balance of the account as of the date specified */
+gnc_numeric xaccAccountGetReconciledBalanceAsOfDate (Account *account, time64 date);
+
 /* These two functions convert a given balance from one commodity to
    another.  The account argument is only used to get the Book, and
    may have nothing to do with the supplied balance.  Likewise, the
@@ -595,12 +598,19 @@ gnc_numeric xaccAccountGetProjectedMinimumBalanceInCurrency (
     const Account *account, const gnc_commodity *report_commodity,
     gboolean include_children);
 
+/* This function gets the balance as of the given date, ignoring
+   closing entries, in the desired commodity. */
+gnc_numeric xaccAccountGetNoclosingBalanceAsOfDateInCurrency(
+    Account *acc, time64 date, gnc_commodity *report_commodity,
+    gboolean include_children);
 /* This function gets the balance as of the given date in the desired
    commodity. */
 gnc_numeric xaccAccountGetBalanceAsOfDateInCurrency(
     Account *account, time64 date, gnc_commodity *report_commodity,
     gboolean include_children);
 
+gnc_numeric xaccAccountGetNoclosingBalanceChangeForPeriod (
+    Account *acc, time64 date1, time64 date2, gboolean recurse);
 gnc_numeric xaccAccountGetBalanceChangeForPeriod (
     Account *acc, time64 date1, time64 date2, gboolean recurse);
 
@@ -965,6 +975,11 @@ guint32 xaccAccountTypesValid(void);
  *  Asset or Liability type, but not a business account type
  *  (meaning not an Accounts Payable/Accounts Receivable). */
 gboolean xaccAccountIsAssetLiabType(GNCAccountType t);
+    
+/** Convenience function to return the fundamental type
+ * asset/liability/income/expense/equity given an account type. */
+GNCAccountType xaccAccountTypeGetFundamental (GNCAccountType t);
+
 
 /** Convenience function to check if the account is a valid
  *  business account type
@@ -1231,6 +1246,17 @@ gint64 xaccAccountGetTaxUSCopyNumber (const Account *account);
 void xaccAccountSetTaxUSCopyNumber (Account *account, gint64 copy_number);
 /** @} */
 
+/** @name Account type debit/credit string getters
+ @ {      *
+ */
+
+/** Get the debit string associated with this account type */
+const char *gnc_account_get_debit_string (GNCAccountType acct_type);
+/** Get the credit string associated with this account type */
+const char *gnc_account_get_credit_string (GNCAccountType acct_type);
+
+/** @} */
+
 
 /** @name Account marking
 @{
@@ -1439,10 +1465,10 @@ GList *gnc_account_imap_get_info_bayes (Account *acc);
  */
 GList *gnc_account_imap_get_info (Account *acc, const char *category);
 
-/** Returns the text string pointed to by full_category for the Account, free
+/** Returns the text string pointed to by head and category for the Account, free
  *  the returned text
  */
-gchar *gnc_account_get_map_entry (Account *acc, const char *full_category);
+gchar *gnc_account_get_map_entry (Account *acc, const char *head, const char *category);
 
 /** Delete the entry for Account pointed to by head,category and match_string,
  *  if empty is TRUE then use delete if empty
@@ -1504,6 +1530,7 @@ const char * dxaccAccountGetQuoteTZ (const Account *account);
 #define ACCOUNT_SORT_REVERSED_ "sort-reversed"
 #define ACCOUNT_NOTES_		"notes"
 #define ACCOUNT_BALANCE_	"balance"
+#define ACCOUNT_NOCLOSING_	"noclosing"
 #define ACCOUNT_CLEARED_	"cleared"
 #define ACCOUNT_RECONCILED_	"reconciled"
 #define ACCOUNT_PRESENT_	"present"

@@ -169,8 +169,8 @@ gnc_file_dialog (GtkWindow *parent,
 
     response = gtk_dialog_run(GTK_DIALOG(file_box));
 
-    // Set the style context for this widget so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(file_box), "GncFileDialog");
+    // Set the name for this dialog so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(file_box), "gnc-id-file");
 
     if (response == GTK_RESPONSE_ACCEPT)
     {
@@ -444,7 +444,7 @@ show_session_error (GtkWindow *parent,
     case ERR_SQL_DB_TOO_NEW:
         fmt = _("This database is from a newer version of GnuCash. "
                 "This version can read it, but cannot safely save to it. "
-                "It will be marked read-only until you do File>Save As, "
+                "It will be marked read-only until you do File->Save As, "
                 "but data may be lost in writing to the old version.");
         gnc_warning_dialog (parent, "%s", fmt);
         uh_oh = TRUE;
@@ -651,7 +651,7 @@ gnc_file_query_save (GtkWindow *parent, gboolean can_cancel)
 static gboolean
 gnc_post_file_open (GtkWindow *parent, const char * filename, gboolean is_readonly)
 {
-    QofSession *current_session, *new_session;
+    QofSession *new_session;
     QofBook *new_book;
     GList *invalid_account_names;
     gboolean uh_oh = FALSE;
@@ -726,7 +726,7 @@ RESTART:
     /* -- this code is almost identical in FileOpen and FileSaveAs -- */
     if (gnc_current_session_exist())
     {
-        current_session = gnc_get_current_session();
+        QofSession *current_session = gnc_get_current_session();
         gnc_hook_run(HOOK_BOOK_CLOSED, current_session);
         gnc_close_gui_component_by_session (current_session);
         gnc_state_save (current_session);
@@ -735,7 +735,7 @@ RESTART:
 
     /* load the accounts from the users datafile */
     /* but first, check to make sure we've got a session going. */
-    new_session = qof_session_new ();
+    new_session = qof_session_new (qof_book_new());
 
     // Begin the new session. If we are in read-only mode, ignore the locks.
     qof_session_begin (new_session, newfile, is_readonly, FALSE, FALSE);
@@ -752,6 +752,8 @@ RESTART:
 
         filename = gnc_file_dialog (parent, NULL, NULL, directory,
                                     GNC_FILE_DIALOG_OPEN);
+        /* Suppress trying to save the empty session. */
+        qof_book_mark_session_saved (qof_session_get_book (new_session));
         qof_session_destroy (new_session);
         new_session = NULL;
         g_free (directory);
@@ -1231,7 +1233,7 @@ gnc_file_do_export(GtkWindow *parent, const char * filename)
 
     /* -- this session code is NOT identical in FileOpen and FileSaveAs -- */
 
-    new_session = qof_session_new ();
+    new_session = qof_session_new (NULL);
     qof_session_begin (new_session, newfile, FALSE, TRUE, FALSE);
 
     io_err = qof_session_get_error (new_session);
@@ -1296,6 +1298,9 @@ gnc_file_save (GtkWindow *parent)
     const char * newfile;
     QofSession *session;
     ENTER (" ");
+
+    if (!gnc_current_session_exist ())
+        return; //No session means nothing to save.
 
     /* hack alert -- Somehow make sure all in-progress edits get committed! */
 
@@ -1363,6 +1368,12 @@ gnc_file_save_as (GtkWindow *parent)
     gchar *last;
 
     ENTER(" ");
+
+    if (!gnc_current_session_exist ())
+    {
+        LEAVE("No Session.");
+        return;
+    }
 
     last = gnc_history_get_last();
     if ( last && gnc_uri_targets_local_fs (last))
@@ -1468,7 +1479,7 @@ gnc_file_do_save_as (GtkWindow *parent, const char* filename)
 
     save_in_progress++;
 
-    new_session = qof_session_new ();
+    new_session = qof_session_new (NULL);
     qof_session_begin (new_session, newfile, FALSE, TRUE, FALSE);
 
     io_err = qof_session_get_error (new_session);

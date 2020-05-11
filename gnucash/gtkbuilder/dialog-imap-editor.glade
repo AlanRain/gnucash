@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.20.2 -->
+<!-- Generated with glade 3.22.1 -->
 <interface>
   <requires lib="gtk+" version="3.10"/>
   <object class="GtkTreeStore" id="tree-store">
@@ -39,6 +39,9 @@
     <property name="type_hint">dialog</property>
     <signal name="destroy" handler="gnc_imap_dialog_window_destroy_cb" swapped="no"/>
     <signal name="response" handler="gnc_imap_dialog_response_cb" swapped="no"/>
+    <child>
+      <placeholder/>
+    </child>
     <child internal-child="vbox">
       <object class="GtkBox" id="dialog-vbox2">
         <property name="can_focus">False</property>
@@ -47,6 +50,20 @@
           <object class="GtkButtonBox" id="dialog-action_area1">
             <property name="can_focus">False</property>
             <property name="layout_style">end</property>
+            <child>
+              <object class="GtkButton" id="remove_button">
+                <property name="label" translatable="yes">_Remove Invalid Mappings</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+                <property name="no_show_all">True</property>
+                <property name="use_underline">True</property>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
             <child>
               <object class="GtkButton" id="delete_button">
                 <property name="label" translatable="yes">_Delete</property>
@@ -58,7 +75,7 @@
               <packing>
                 <property name="expand">False</property>
                 <property name="fill">False</property>
-                <property name="position">0</property>
+                <property name="position">1</property>
               </packing>
             </child>
             <child>
@@ -74,7 +91,7 @@
               <packing>
                 <property name="expand">False</property>
                 <property name="fill">False</property>
-                <property name="position">1</property>
+                <property name="position">2</property>
               </packing>
             </child>
           </object>
@@ -82,7 +99,7 @@
             <property name="expand">False</property>
             <property name="fill">False</property>
             <property name="pack_type">end</property>
-            <property name="position">0</property>
+            <property name="position">3</property>
           </packing>
         </child>
         <child>
@@ -95,7 +112,7 @@
           <packing>
             <property name="expand">False</property>
             <property name="fill">False</property>
-            <property name="position">1</property>
+            <property name="position">0</property>
           </packing>
         </child>
         <child>
@@ -139,7 +156,7 @@
             </child>
             <child>
               <object class="GtkRadioButton" id="radio-online">
-                <property name="label" translatable="yes">Online ID</property>
+                <property name="label" translatable="yes">Online</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">False</property>
@@ -158,7 +175,7 @@
           <packing>
             <property name="expand">False</property>
             <property name="fill">False</property>
-            <property name="position">2</property>
+            <property name="position">1</property>
           </packing>
         </child>
         <child>
@@ -248,6 +265,22 @@
           <packing>
             <property name="expand">True</property>
             <property name="fill">True</property>
+            <property name="position">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="total_entries_label">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="halign">start</property>
+            <property name="margin_left">6</property>
+            <property name="margin_right">6</property>
+            <property name="margin_top">3</property>
+            <property name="margin_bottom">3</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
             <property name="position">3</property>
           </packing>
         </child>
@@ -255,9 +288,12 @@
           <object class="GtkLabel" id="filter-label">
             <property name="visible">True</property>
             <property name="can_focus">False</property>
-            <property name="margin_top">5</property>
-            <property name="margin_bottom">5</property>
+            <property name="margin_top">3</property>
+            <property name="margin_bottom">3</property>
             <property name="label" translatable="yes">Filter will be applied to 'Match String' and 'Mapped to Account Name' fields, case sensitive.</property>
+            <style>
+              <class name="gnc-class-highlight"/>
+            </style>
           </object>
           <packing>
             <property name="expand">False</property>
@@ -284,6 +320,9 @@
               <object class="GtkEntry" id="filter-text-entry">
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
+                <property name="has_focus">True</property>
+                <property name="can_default">True</property>
+                <property name="has_default">True</property>
                 <property name="invisible_char">●</property>
                 <property name="primary_icon_activatable">False</property>
                 <property name="secondary_icon_activatable">False</property>
@@ -324,7 +363,7 @@
             </child>
             <child>
               <object class="GtkButton" id="collapse-button">
-                <property name="label" translatable="yes">_Collapse All</property>
+                <property name="label" translatable="yes">Collapse _All</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
@@ -358,8 +397,8 @@
           <object class="GtkLabel" id="label2">
             <property name="visible">True</property>
             <property name="can_focus">False</property>
-            <property name="margin_top">5</property>
-            <property name="margin_bottom">5</property>
+            <property name="margin_top">3</property>
+            <property name="margin_bottom">3</property>
             <property name="label" translatable="yes">Multiple rows can be selected and then deleted by pressing the delete button.</property>
           </object>
           <packing>
@@ -371,11 +410,9 @@
       </object>
     </child>
     <action-widgets>
+      <action-widget response="-2">remove_button</action-widget>
       <action-widget response="-10">delete_button</action-widget>
       <action-widget response="-6">close_button</action-widget>
     </action-widgets>
-    <child>
-      <placeholder/>
-    </child>
   </object>
 </interface>

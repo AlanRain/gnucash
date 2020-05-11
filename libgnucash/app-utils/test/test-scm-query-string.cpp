@@ -26,8 +26,7 @@ extern "C"
 #include <glib.h>
 #include "guile-mappings.h"
 
-#include "engine-helpers-guile.h"
-#include "gnc-module.h"
+#include "gnc-engine-guile.h"
 #include "gnc-guile-utils.h"
 #include "test-engine-stuff.h"
 #include "test-stuff.h"
@@ -55,7 +54,7 @@ test_query (Query *q, SCM val2str)
     str2 = gnc_scm_to_utf8_string (str_q);
     if (str2)
     {
-        res_q = scm_c_eval_string (str2);
+        res_q = scm_eval_string (str_q);
     }
     else
     {
@@ -112,9 +111,7 @@ run_tests (void)
 static void
 main_helper (void *closure, int argc, char **argv)
 {
-    gnc_module_system_init ();
-    gnc_module_load("gnucash/engine", 0);
-    gnc_module_load("gnucash/app-utils", 0);
+    scm_c_use_module("gnucash app-utils");
 
     xaccLogDisable ();
 

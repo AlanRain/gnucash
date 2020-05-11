@@ -555,9 +555,18 @@ typedef struct GncPluginPageRegister2Private
 } GncPluginPageRegister2Private;
 
 #define GNC_PLUGIN_PAGE_REGISTER2_GET_PRIVATE(o)  \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_PLUGIN_PAGE_REGISTER2, GncPluginPageRegister2Private))
+   ((GncPluginPageRegister2Private*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_PLUGIN_PAGE_REGISTER2))
 
 static GObjectClass *parent_class = NULL;
+
+static gpointer
+gnc_plug_page_register_check_commodity(Account *account, void* usr_data)
+{
+    // Check that account's commodity matches the commodity in usr_data
+    gnc_commodity* com0 = (gnc_commodity*) usr_data;
+    gnc_commodity* com1 = xaccAccountGetCommodity(account);
+    return gnc_commodity_equal(com1, com0) ? NULL : com1;
+}
 
 /************************************************************/
 /*                      Implementation                      */
@@ -630,6 +639,8 @@ gnc_plugin_page_register2_new (Account *account, gboolean subaccounts)
     GNCLedgerDisplay2 *ledger;
     GncPluginPage *page;
     GncPluginPageRegister2Private *priv;
+    gnc_commodity* com0;
+    gnc_commodity* com1;
 
 /*################## Added for Reg2 #################*/
     const GList *item;
@@ -657,9 +668,10 @@ gnc_plugin_page_register2_new (Account *account, gboolean subaccounts)
         }
     }
 /*################## Added for Reg2 #################*/
-
+    com0 = gnc_account_get_currency_or_parent(account);
+    com1 = gnc_account_foreach_descendant_until(account,gnc_plug_page_register_check_commodity,com0);
     if (subaccounts)
-        ledger = gnc_ledger_display2_subaccounts (account);
+        ledger = gnc_ledger_display2_subaccounts (account,com1!=NULL);
     else
         ledger = gnc_ledger_display2_simple (account);
 
@@ -1061,8 +1073,8 @@ gnc_plugin_page_register2_create_widget (GncPluginPage *plugin_page)
     gtk_box_set_homogeneous (GTK_BOX (priv->widget), FALSE);
     gtk_widget_show (priv->widget);
 
-    // Set the style context for this page so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(priv->widget), "GncRegisterPage");
+    // Set the name for this widget so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(priv->widget), "gnc-id-register2-page");
 
     numRows = priv->lines_default;
     numRows = MIN (numRows, DEFAULT_LINES_AMOUNT);
@@ -3929,7 +3941,7 @@ gnc_plugin_page_register2_close_cb (gpointer user_data)
 
 /** This function is called when an account has been edited and an
  *  "extreme" change has been made to it.  (E.G. Changing from a
- *  credit card account to an expense account.  This rouine is
+ *  credit card account to an expense account.  This routine is
  *  responsible for finding all open registers containing the account
  *  and closing them.
  *

@@ -171,7 +171,7 @@ gnc_ui_select_commodity_modal_full(gnc_commodity * orig_sel,
     if (user_message != NULL)
         initial = user_message;
     else if ((cusip != NULL) || (fullname != NULL) || (mnemonic != NULL))
-        initial = _("\nPlease select a commodity to match:");
+        initial = _("\nPlease select a commodity to match");
     else
         initial = "";
 
@@ -266,8 +266,9 @@ gnc_ui_select_commodity_create(const gnc_commodity * orig_sel,
     retval->ok_button = GTK_WIDGET(gtk_builder_get_object (builder, "ss_ok_button"));
     label = GTK_WIDGET(gtk_builder_get_object (builder, "item_label"));
 
-    // Set the style context for this dialog so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(retval->dialog), "GncSecurityDialog");
+    // Set the name for this dialog so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(retval->dialog), "gnc-id-security-select");
+    gnc_widget_style_context_add_class (GTK_WIDGET(retval->dialog), "gnc-class-securities");
 
     gnc_cbwe_require_list_item(GTK_COMBO_BOX(retval->namespace_combo));
     gnc_cbwe_require_list_item(GTK_COMBO_BOX(retval->commodity_combo));
@@ -285,17 +286,17 @@ gnc_ui_select_commodity_create(const gnc_commodity * orig_sel,
     {
     case DIAG_COMM_ALL:
         title = _("Select security/currency");
-        text = _("_Security/currency:");
+        text = _("_Security/currency");
         break;
     case DIAG_COMM_NON_CURRENCY:
     case DIAG_COMM_NON_CURRENCY_SELECT:
         title = _("Select security");
-        text = _("_Security:");
+        text = _("_Security");
         break;
     case DIAG_COMM_CURRENCY:
     default:
         title = _("Select currency");
-        text = _("Cu_rrency:");
+        text = _("Cu_rrency");
         button = GTK_WIDGET(gtk_builder_get_object (builder, "ss_new_button"));
         gtk_widget_destroy(button);
         break;
@@ -624,7 +625,7 @@ gnc_ui_update_namespace_picker (GtkWidget *cbwe,
         }
     }
 
-    /* Next insert insert "All non-currency" entry if requested */
+    /* Next insert "All non-currency" entry if requested */
     if (mode == DIAG_COMM_NON_CURRENCY_SELECT || mode == DIAG_COMM_ALL)
     {
         gtk_list_store_append(GTK_LIST_STORE(model), &iter);
@@ -910,8 +911,9 @@ gnc_ui_build_commodity_dialog(const char * selected_namespace,
 
     retval->dialog = GTK_WIDGET(gtk_builder_get_object (builder, "security_dialog"));
 
-    // Set the style context for this dialog so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(retval->dialog), "GncSecurityDialog");
+    // Set the name for this dialog so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(retval->dialog), "gnc-id-security");
+    gnc_widget_style_context_add_class (GTK_WIDGET(retval->dialog), "gnc-class-securities");
 
     if (parent != NULL)
         gtk_window_set_transient_for (GTK_WINDOW (retval->dialog), GTK_WINDOW (parent));

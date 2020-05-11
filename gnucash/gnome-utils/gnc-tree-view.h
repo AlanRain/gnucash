@@ -79,7 +79,7 @@ GType gnc_tree_view_get_type (void);
 #define REAL_TITLE  "real_title"
 
 /* The name of this column to use when saving the view's state.  It is
- * used internally to map this colum's properties to the saved state. */
+ * used internally to map this column's properties to the saved state. */
 #define PREF_NAME  "pref-name"
 
 /* A column with this attribute set cannot be hidden from view. Valid
@@ -191,6 +191,53 @@ gnc_tree_view_add_toggle_column (GncTreeView *view,
  */
 GtkTreeViewColumn *
 gnc_tree_view_add_text_column (GncTreeView *view,
+                               const gchar *column_title,
+                               const gchar *pref_name,
+                               const gchar *icon_name,
+                               const gchar *sizing_text,
+                               gint model_data_column,
+                               gint model_visibility_column,
+                               GtkTreeIterCompareFunc column_sort_fn);
+
+/** This function adds a new text view column to a GncTreeView base view.
+ *  It takes all the parameters necessary to hook a GtkTreeModel
+ *  column to a GtkTreeViewColumn.
+ *
+ *  @param view A pointer to a generic GncTreeView.
+ *
+ *  @param column_title The title for this column.
+ *
+ *  @param pref_name The internal name of this column.  This name is
+ *  used in several functions to look up the column, and it is also
+ *  used when saving/restoring the view's state.
+ *
+ *  @param icon_name The name of the icon to display to
+ *  the left of the text in this column.  Used for adding icons like
+ *  the "account" icon to a view.  This must be a registered icon,
+ *  not a filename.
+ *
+ *  @param sizing_text A string used to compute the default width of
+ *  the column.  This text is never displayed.
+ *
+ *  @param model_data_column The index of the GtkTreeModel data column
+ *  used to determine the data that will be displayed in this column
+ *  for each row in the view.  Use GNC_TREE_VIEW_COLUMN_DATA_NONE if
+ *  you plan on using a non-model data source for this column.  This
+ *  index is connected to the "text" attribute of the cell renderer.
+ *
+ *  @param model_visibility_column The index of the GtkTreeModel data
+ *  column used to determine whether or not a checkbox for each row
+ *  will be displayed at all.  Use GNC_TREE_VIEW_COLUMN_VISIBLE_ALWAYS
+ *  if the checkbox should be displayed in all rows.
+ *
+ *  @param column_sort_fn The function that GtkTreeModelSort
+ *  will call to compare two rows to determine their displayed
+ *  order.
+ *
+ *  @return The newly created GtkTreeViewColumn.
+ */
+GtkTreeViewColumn *
+gnc_tree_view_add_text_view_column (GncTreeView *view,
                                const gchar *column_title,
                                const gchar *pref_name,
                                const gchar *icon_name,
@@ -438,7 +485,7 @@ gnc_tree_view_get_show_column_menu (GncTreeView *view);
  *  @returns The cell renderer in use in the column.
  */
 GtkCellRenderer *
-gnc_tree_view_column_get_renderer(GtkTreeViewColumn *column);
+gnc_tree_view_column_get_renderer (GtkTreeViewColumn *column);
 
 
 /* Takes a GdkEventKey and the current path and column for the
@@ -446,26 +493,26 @@ gnc_tree_view_column_get_renderer(GtkTreeViewColumn *column);
  * cursor.  Returns the new column and the possibly changed (if
  * navigation wrapped a row) path. */
 void
-gnc_tree_view_keynav(GncTreeView *view, GtkTreeViewColumn **col,
-                     GtkTreePath *path, GdkEventKey *event);
+gnc_tree_view_keynav (GncTreeView *view, GtkTreeViewColumn **col,
+                      GtkTreePath *path, GdkEventKey *event);
 
-/* Returns TRUE if path is a vaid path for the treeview */
+/* Returns TRUE if path is a valid path for the treeview */
 gboolean
-gnc_tree_view_path_is_valid(GncTreeView *view, GtkTreePath *path);
+gnc_tree_view_path_is_valid (GncTreeView *view, GtkTreePath *path);
 
-/** Setup a callback for when the user starts editing so appropiate actions can be taken
+/** Setup a callback for when the user starts editing so appropriate actions can be taken
  *  like disable the actions delete menu option.
  */
 void
-gnc_tree_view_set_editing_started_cb(GncTreeView *view,
-                    GFunc editing_started_cb, gpointer editing_cb_data);
+gnc_tree_view_set_editing_started_cb (GncTreeView *view,
+                     GFunc editing_started_cb, gpointer editing_cb_data);
 
-/** Setup a callback for when the user finishes editing so appropiate actions can be taken
+/** Setup a callback for when the user finishes editing so appropriate actions can be taken
  *  like enable the actions delete menu option.
  */
 void
-gnc_tree_view_set_editing_finished_cb(GncTreeView *view,
-                   GFunc editing_finished_cb, gpointer editing_cb_data);
+gnc_tree_view_set_editing_finished_cb (GncTreeView *view,
+                    GFunc editing_finished_cb, gpointer editing_cb_data);
 
 /** @} */
 

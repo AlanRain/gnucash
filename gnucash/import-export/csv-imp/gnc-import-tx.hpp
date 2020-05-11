@@ -79,7 +79,7 @@ enum parse_line_cols {
 };
 
 /** Tuple to hold all internal state for one parsed line. The contents of each
- * colummn is described by the parse_line_cols enum. This enum should be used
+ * column is described by the parse_line_cols enum. This enum should be used
  * with std::get to access the columns. */
 using parse_line_t = std::tuple<StrVec,
                                 std::string,
@@ -98,7 +98,7 @@ struct ErrorList;
  *   the result of this step can be queried from tokenizer
  * - the user should now map the columns to types, which is stored in column_types
  * - last step is convert the mapped columns into a list of transactions
- * - this list will then be passed on the the generic importer for further processing */
+ * - this list will then be passed on the generic importer for further processing */
 class GncTxImport
 {
 public:

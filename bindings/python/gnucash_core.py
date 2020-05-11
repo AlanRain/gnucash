@@ -75,7 +75,7 @@ class Session(GnuCashCoreClass):
     """
 
     def __init__(self, book_uri=None, ignore_lock=False, is_new=False,
-                 force_new= False):
+                 force_new=False, instance=None):
         """A convenient constructor that allows you to specify a book URI,
         begin the session, and load the book.
 
@@ -95,13 +95,15 @@ class Session(GnuCashCoreClass):
         ignore_lock is passed to qof_session_begin's argument of the
         same name and is used to break an existing lock on a dataset.
 
+        instance argument can be passed if new Session is used as a
+        wrapper for an existing session instance
 
 
         This function can raise a GnuCashBackendException. If it does,
         you don't need to cleanup and call end() and destroy(), that is handled
         for you, and the exception is raised.
         """
-        GnuCashCoreClass.__init__(self)
+        GnuCashCoreClass.__init__(self, Book())
         if book_uri is not None:
             try:
                 self.begin(book_uri, ignore_lock, is_new, force_new)
@@ -116,6 +118,15 @@ class Session(GnuCashCoreClass):
                 self.end()
                 self.destroy()
                 raise
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        # Roll back changes on exception by not calling save. Only works for XMl backend.
+        if not exc_type:
+            self.save()
+        self.end()
 
     def raise_backend_errors(self, called_function="qof_session function"):
         """Raises a GnuCashBackendException if there are outstanding
@@ -239,7 +250,7 @@ class Book(GnuCashCoreClass):
 
     def InvoiceNextID(self, customer):
       ''' Return the next invoice ID.
-      This works but I'm not entirely happy with it.  FIX ME'''
+      '''
       from gnucash.gnucash_core_c import gncInvoiceNextID
       return gncInvoiceNextID(self.get_instance(),customer.GetEndOwner().get_instance()[1])
 
@@ -350,7 +361,7 @@ class GncPrice(GnuCashCoreClass):
       commodity with respect to another commodity.
       For example, a given price might represent the value of LNUX in USD on 2001-02-03.
 
-      See also http://code.gnucash.org/docs/head/group__Price.html
+      See also https://code.gnucash.org/docs/head/group__Price.html
     '''
     _new_instance = 'gnc_price_create'
 GncPrice.add_methods_with_prefix('gnc_price_')
@@ -369,7 +380,7 @@ class GncPriceDB(GnuCashCoreClass):
     Every QofBook contains a GNCPriceDB, accessible via gnc_pricedb_get_db.
 
     Definition in file gnc-pricedb.h.
-    See also http://code.gnucash.org/docs/head/gnc-pricedb_8h.html
+    See also https://code.gnucash.org/docs/head/gnc-pricedb_8h.html
     '''
 
 GncPriceDB.add_methods_with_prefix('gnc_pricedb_')
@@ -434,6 +445,9 @@ class Transaction(GnuCashCoreClass):
         return self.do_lookup_create_oo_instance(
             gncInvoiceGetInvoiceFromTxn, Transaction )
 
+    def __eq__(self, other):
+        return self.Equal(other, True, False, False, False)
+
 def decorate_monetary_list_returning_function(orig_function):
     def new_function(self, *args):
         """decorate function that returns list of gnc_monetary to return tuples of GncCommodity and GncNumeric
@@ -460,6 +474,9 @@ class Split(GnuCashCoreClass):
     another.
     """
     _new_instance = 'xaccMallocSplit'
+
+    def __eq__(self, other):
+        return self.Equal(other, True, False, False)
 
 class Account(GnuCashCoreClass):
     """A GnuCash Account.
@@ -619,7 +636,7 @@ methods_return_instance(GncLot, gnclot_dict)
 
 # Transaction
 Transaction.add_methods_with_prefix('xaccTrans')
-Transaction.add_method('gncTransGetGUID', 'GetGUID');
+Transaction.add_method('gncTransGetGUID', 'GetGUID')
 
 Transaction.add_method('xaccTransGetDescription', 'GetDescription')
 Transaction.add_method('xaccTransDestroy', 'Destroy')
@@ -648,7 +665,7 @@ Transaction.decorate_functions(
 
 # Split
 Split.add_methods_with_prefix('xaccSplit')
-Split.add_method('gncSplitGetGUID', 'GetGUID');
+Split.add_method('gncSplitGetGUID', 'GetGUID')
 Split.add_method('xaccSplitDestroy', 'Destroy')
 
 split_dict =    {
@@ -677,7 +694,7 @@ Split.parent = property( Split.GetParent, Split.SetParent )
 # Account
 Account.add_methods_with_prefix('xaccAccount')
 Account.add_methods_with_prefix('gnc_account_')
-Account.add_method('gncAccountGetGUID', 'GetGUID');
+Account.add_method('gncAccountGetGUID', 'GetGUID')
 Account.add_method('xaccAccountGetPlaceholder', 'GetPlaceholder')
 
 account_dict =  {

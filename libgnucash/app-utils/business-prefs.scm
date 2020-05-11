@@ -19,7 +19,7 @@
 ;; 51 Franklin Street, Fifth Floor    Fax:    +1-617-542-2652
 ;; Boston, MA  02110-1301,  USA       gnu@gnu.org
 
-(use-modules (gnucash app-utils))
+(use-modules (gnucash core-utils))
 
 (define gnc:*option-section-counters* (N_ "Counters"))
 
@@ -156,6 +156,12 @@
    (gnc:make-budget-option
     gnc:*option-section-budgeting* gnc:*option-name-default-budget*
     "a" (N_ "Budget to be used when none has been otherwise specified.")))
+
+  ;; Tax Tab
+  (reg-option
+   (gnc:make-string-option
+    gnc:*tax-label* gnc:*tax-nr-label*
+    "a" (N_ "The electronic tax number of your business") ""))
 
   ;; Counters Tab
   (for-each

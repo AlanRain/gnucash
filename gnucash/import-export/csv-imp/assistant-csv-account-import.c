@@ -205,7 +205,7 @@ csv_import_file_chooser_selection_changed_cb (GtkFileChooser *chooser,
     GtkAssistant *assistant = GTK_ASSISTANT(info->assistant);
     gtk_assistant_set_page_complete (assistant, info->account_page, FALSE);
 
-    /* Enable the forward button based on a valid filename */
+    /* Enable the "Next" button based on a valid filename */
     gtk_assistant_set_page_complete (assistant, info->file_page,
         csv_import_assistant_check_filename (chooser, info));
 }
@@ -255,14 +255,14 @@ void csv_import_hrows_cb (GtkWidget *spin, gpointer user_data)
 /*******************************************************
  * csv_import_assistant_enable_account_forward
  *
- * enaable forward button on account_page if store has rows
+ * enable "Next" button on account_page if store has rows
  *******************************************************/
 static void csv_import_assistant_enable_account_forward (CsvImportInfo *info)
 {
     GtkAssistant *assistant = GTK_ASSISTANT(info->assistant);
     gboolean store_has_rows = TRUE;
 
-    /* if the store is empty, disable forward button */
+    /* if the store is empty, disable "Next" button */
     if (gtk_tree_model_iter_n_children (GTK_TREE_MODEL(info->store), NULL) == 0)
         store_has_rows = FALSE;
 
@@ -273,7 +273,7 @@ static void csv_import_assistant_enable_account_forward (CsvImportInfo *info)
 /*******************************************************
  * csv_import_sep_cb
  *
- * call back for type of separartor required
+ * call back for type of separator required
  *******************************************************/
 void csv_import_sep_cb (GtkWidget *radio, gpointer user_data)
 {
@@ -320,7 +320,7 @@ void csv_import_sep_cb (GtkWidget *radio, gpointer user_data)
     else
         gtk_spin_button_set_value (GTK_SPIN_BUTTON(info->header_row_spin), 0); //reset header spin to 0
 
-    /* if the store has rows, enable forward button */
+    /* if the store has rows, enable "Next" button */
     csv_import_assistant_enable_account_forward (info);
 }
 
@@ -439,7 +439,7 @@ csv_import_assistant_file_page_prepare (GtkAssistant *assistant,
     if (info->starting_dir)
         gtk_file_chooser_set_current_folder (GTK_FILE_CHOOSER(info->file_chooser), info->starting_dir);
 
-    /* Disable the Forward Assistant Button */
+    /* Disable the "Next" Assistant Button */
     gtk_assistant_set_page_complete (assistant, info->file_page, FALSE);
 }
 
@@ -451,7 +451,7 @@ csv_import_assistant_account_page_prepare (GtkAssistant *assistant,
     CsvImportInfo *info = user_data;
     csv_import_result res;
 
-    /* Disable the Forward Assistant Button */
+    /* Disable the "Next" Assistant Button */
     gtk_assistant_set_page_complete (assistant, info->account_page, FALSE);
 
     /* test read one line */
@@ -477,7 +477,7 @@ csv_import_assistant_account_page_prepare (GtkAssistant *assistant,
     else
         gtk_spin_button_set_value (GTK_SPIN_BUTTON(info->header_row_spin), 0); //reset header spin to 0
 
-    /* if the store has rows, enable forward button */
+    /* if the store has rows, enable "Next" button */
     csv_import_assistant_enable_account_forward (info);
 }
 
@@ -641,8 +641,9 @@ csv_import_assistant_create (CsvImportInfo *info)
     gnc_builder_add_from_file  (builder, "assistant-csv-account-import.glade", "csv_account_import_assistant");
     info->assistant = GTK_WIDGET(gtk_builder_get_object (builder, "csv_account_import_assistant"));
 
-    // Set the style context for this dialog so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(info->assistant), "GncAssistAccountImport");
+    // Set the name for this assistant so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(info->assistant), "gnc-id-assistant-csv-account-import");
+    gnc_widget_style_context_add_class (GTK_WIDGET(info->assistant), "gnc-class-imports");
 
     /* Load default settings */
     load_settings (info);

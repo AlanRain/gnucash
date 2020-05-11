@@ -18,22 +18,17 @@
 (define-module (gnucash app-utils))
 (eval-when
       (compile load eval expand)
-      (load-extension "libgncmod-app-utils" "scm_init_sw_app_utils_module"))
+      (load-extension "libgnc-app-utils" "scm_init_sw_app_utils_module"))
 (use-modules (sw_app_utils))
+
+; Export the swig-wrapped symbols in the public interface of this module
+(let ((i (module-public-interface (current-module))))
+     (module-use! i (resolve-interface '(sw_app_utils))))
+
 (use-modules (srfi srfi-1))
 (use-modules (gnucash utilities))
-(use-modules (gnucash gnc-module))
-(use-modules (gnucash gettext))
-
-;; Guile 2 needs to find the symbols from the c module at compile time already
-(eval-when
-      (compile load eval expand)
-      (gnc:module-load "gnucash/engine" 0))
-
-;; gettext.scm
-(re-export gnc:gettext)
-(re-export _)
-(re-export N_)
+(use-modules (gnucash engine))
+(use-modules (gnucash core-utils))
 
 ;; c-interface.scm
 (export gnc:apply-with-error-handling)
@@ -148,7 +143,6 @@
 (export gnc:options-get-default-section)
 (export gnc:options-copy-values)
 (export gnc:send-options)
-(export gnc:save-options)
 
 (define (gnc:option-get-value book category key)
   ;;Access an option directly
@@ -157,11 +151,6 @@
                            (append (list category) key)
                            (list category key))))
 (export gnc:option-get-value)
-
-;; prefs.scm
-(export gnc:get-debit-string)
-(export gnc:get-credit-string)
-(export gnc:config-file-format-version)
 
 ;; gw-engine-spec.scm
 (re-export HOOK-SAVE-OPTIONS)
@@ -204,8 +193,6 @@
 (export incdate)
 (export decdate)
 (export incdate)
-(export gnc:time64-le-date)
-(export gnc:time64-ge-date)
 (export gnc:make-date-interval-list)
 (export gnc:make-date-list)
 (export SecDelta)
@@ -227,12 +214,7 @@
 (export gnc:reldate-get-string)
 (export gnc:reldate-get-desc)
 (export gnc:reldate-get-fn)
-(export gnc:make-reldate-hash)
-(export gnc:reldate-string-db)
-(export gnc:relative-date-values)
-(export gnc:relative-date-hash)
 (export gnc:get-absolute-from-relative-date)
-(export gnc:get-relative-date-strings)
 (export gnc:get-relative-date-string)
 (export gnc:get-relative-date-desc)
 (export gnc:get-start-cal-year)
@@ -264,29 +246,12 @@
 (export gnc:get-start-next-year)
 (export gnc:get-three-months-ahead)
 
-;; hooks 
-(export gnc:hook-run-danglers)	    	;; from hooks.scm- deprecated
-(re-export gnc-hook-add-scm-dangler)
-(re-export HOOK-REPORT)
-
-;; simple-obj
-(export make-simple-class)
-(export simple-obj-getter)
-(export simple-obj-setter)
-(export simple-obj-print)
-(export simple-obj-to-list)
-(export simple-obj-from-list)
-(export make-simple-obj)
-
 (define gnc:*kvp-option-path* (list KVP-OPTION-PATH))
 (export gnc:*kvp-option-path*)
 
-(load-from-path "c-interface")
-(load-from-path "options")
-(load-from-path "hooks")
-(load-from-path "prefs")
-(load-from-path "date-utilities")
-(load-from-path "simple-obj")
+(load-from-path "gnucash/app-utils/c-interface")
+(load-from-path "gnucash/app-utils/options")
+(load-from-path "gnucash/app-utils/date-utilities")
 
 ;; Business options
 (define gnc:*business-label* (N_ "Business"))
@@ -300,6 +265,8 @@
 (define gnc:*company-contact* (N_ "Company Contact Person"))
 (define gnc:*fancy-date-label* (N_ "Fancy Date Format"))
 (define gnc:*fancy-date-format* (N_ "custom"))
+(define gnc:*tax-label* (N_ "Tax"))
+(define gnc:*tax-nr-label* (N_ "Tax Number"))
 
 (define (gnc:company-info book key)
   ;; Access company info from key-value pairs for current book
@@ -328,6 +295,7 @@
         gnc:*option-name-currency-accounting* gnc:*option-name-book-currency*
         gnc:*option-name-default-gains-policy*
         gnc:*option-name-default-gain-loss-account*
+        gnc:*tax-label* gnc:*tax-nr-label*
         gnc:*option-name-auto-readonly-days* gnc:*option-name-num-field-source*)
 
 (define gnc:*option-section-budgeting* OPTION-SECTION-BUDGETING)
@@ -335,5 +303,17 @@
 
 (export gnc:*option-section-budgeting* gnc:*option-name-default-budget*)
 
-(load-from-path "business-options")
-(load-from-path "business-prefs")
+(load-from-path "gnucash/app-utils/business-options")
+(load-from-path "gnucash/app-utils/business-prefs")
+
+
+;; Symbols deprecated in 4.x, to remove for 5.x
+(define-public (gnc:get-debit-string acct-type)
+    (issue-deprecation-warning "gnc:get-debit-string is deprecated. Please use (gnucash engine)'s gnc-account-get-debit-string instead.")
+    (gnc-account-get-debit-string acct-type))
+(define-public (gnc:get-credit-string acct-type)
+    (issue-deprecation-warning "gnc:get-credit-string is deprecated. Please use (gnucash engine)'s gnc-account-get-credit-string instead.")
+    (gnc-account-get-debit-string acct-type))
+(define-public (gnc:config-file-format-version version)
+    (issue-deprecation-warning "gnc:config-file-format-version is deprecated and will be removed from a future version.")
+    #t)

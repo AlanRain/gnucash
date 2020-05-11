@@ -991,6 +991,16 @@ gnc_search_dialog_add_criterion (GNCSearchWindow *sw)
 static void
 add_criterion (GtkWidget *button, GNCSearchWindow *sw)
 {
+    gint number_of_buttons = g_list_length (sw->crit_list) + 1;
+    gint button_height = gtk_widget_get_allocated_height (button);
+    gint min_height = MIN (number_of_buttons * button_height, 5 * button_height);
+
+    // this sets the minimum content height for the criteria scroll
+    // window, it is set to a max of 5 buttons visible without scrolling
+    gtk_scrolled_window_set_min_content_height (GTK_SCROLLED_WINDOW(
+                                                sw->criteria_scroll_window),
+                                                min_height + (button_height/2));
+
     gnc_search_dialog_add_criterion (sw);
 }
 
@@ -1094,8 +1104,7 @@ type_label_to_new_button(const gchar* type_label)
     else
     {
         PWARN("No translatable new-button label found for search type \"%s\", please add one into dialog-search.c!", type_label);
-        /* Translators: This string has a disambiguation prefix. Translate only the part behind '|' */
-        return Q_("Item represents an unknown object type (in the sense of bill, customer, invoice, transaction, split,...)|New item");
+        return C_("Item represents an unknown object type (in the sense of bill, customer, invoice, transaction, split,...)!", "New item");
     }
 }
 
@@ -1118,8 +1127,9 @@ gnc_search_dialog_init_widgets (GNCSearchWindow *sw, const gchar *title)
     gtk_window_set_title(GTK_WINDOW(sw->dialog), title);
     g_object_set_data (G_OBJECT (sw->dialog), "dialog-info", sw);
 
-    // Set the style context for this dialog so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(sw->dialog), "GncSearchDialog");
+    // Set the name for this dialog so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(sw->dialog), "gnc-id-search");
+    gnc_widget_style_context_add_class (GTK_WIDGET(sw->dialog), "gnc-class-search");
 
     /* Grab the result hbox */
     sw->result_hbox = GTK_WIDGET(gtk_builder_get_object (builder, "result_hbox"));
@@ -1311,11 +1321,17 @@ gnc_search_dialog_create (GtkWindow *parent,
     gtk_window_set_transient_for(GTK_WINDOW(sw->dialog), parent);
     gtk_widget_show(sw->dialog);
 
-    // Set the style context for this dialog so it can be easily manipulated with css
-    if (style_class == NULL)
-        gnc_widget_set_style_context (GTK_WIDGET(sw->dialog), "GncSearchDialog");
-    else
-        gnc_widget_set_style_context (GTK_WIDGET(sw->dialog), style_class);
+    /* For some reason on Ubuntu 18.04 that uses Gtk3.22.30 and maybe others we
+     * have to set the scroll window content min height after the dialog has been
+     * shown to get the correct scroll window height */
+    gtk_scrolled_window_set_min_content_height (GTK_SCROLLED_WINDOW(
+                                                sw->criteria_scroll_window),
+                                                gtk_widget_get_allocated_height (
+                                                GTK_WIDGET(sw->grouping_combo)) * 1.5);
+
+    // Add a style context for this dialog so it can be easily manipulated with css
+    if (style_class != NULL)
+        gnc_widget_style_context_add_class (GTK_WIDGET(sw->dialog), style_class);
 
     /* Maybe display the original query results? */
     if (callbacks && show_start_query)
@@ -1453,7 +1469,6 @@ gnc_search_dialog_test (void)
         display = get_display_list (GNC_ID_SPLIT);
 
 /* FIXME: All this does is leak. */
-/*      (keep the line break below to avoid a translator comment) */
     gnc_search_dialog_create (NULL, GNC_ID_SPLIT,
                   _("Find Transaction"),
                   params, display,

@@ -62,6 +62,7 @@
 #include "gnc-ui.h"
 #include "gnc-ui-util.h"
 #include "gnucash-sheet.h"
+#include "gnc-session.h"
 
 #include "gnc-split-reg.h"
 
@@ -644,7 +645,8 @@ gnc_sxed_split_check_account (GncSxEditorDialog *sxed, Split *s,
                       NULL);
     acct = xaccAccountLookup (acct_guid, gnc_get_current_book ());
     guid_free (acct_guid);
-    if (acct == NULL)
+    // If the split is being destroyed always return TRUE.
+    if (acct == NULL && !qof_instance_get_destroying(s))
         return FALSE;
     split_cmdty = xaccAccountGetCommodity(acct);
     split_amount = xaccSplitGetAmount(s);
@@ -962,7 +964,7 @@ gnc_sxed_save_sx( GncSxEditorDialog *sxed )
 
         autocreateState = gtk_toggle_button_get_active( sxed->autocreateOpt );
         notifyState = gtk_toggle_button_get_active( sxed->notifyOpt );
-        /* "Notify" only makes sense if AutoCreate is actived;
+        /* "Notify" only makes sense if AutoCreate is activated;
          * enforce that here. */
         xaccSchedXactionSetAutoCreate( sxed->sx,
                                        autocreateState,
@@ -1122,6 +1124,7 @@ gnc_ui_scheduled_xaction_editor_dialog_create (GtkWindow *parent,
     GtkBuilder *builder;
     GtkWidget *button;
     int i;
+    int id;
     GList *dlgExists = NULL;
 
     static struct widgetSignalCallback
@@ -1191,9 +1194,10 @@ gnc_ui_scheduled_xaction_editor_dialog_create (GtkWindow *parent,
     sxed->endCountSpin = GTK_ENTRY(gtk_builder_get_object (builder, "end_spin"));
     sxed->endRemainSpin = GTK_ENTRY(gtk_builder_get_object (builder, "remain_spin"));
 
-    // Set the style context for this dialog so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(sxed->dialog), "GncSxEditorDialog");
-    
+    // Set the name of this dialog so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(sxed->dialog), "gnc-id-sx-editor");
+    gnc_widget_style_context_add_class (GTK_WIDGET(sxed->dialog), "gnc-class-sx");
+   
     gtk_window_set_transient_for (GTK_WINDOW (sxed->dialog), parent);
 
     /* Setup the end-date GNC widget */
@@ -1207,10 +1211,12 @@ gnc_ui_scheduled_xaction_editor_dialog_create (GtkWindow *parent,
                             TRUE, TRUE, 0 );
     }
 
-    gnc_register_gui_component( DIALOG_SCHEDXACTION_EDITOR_CM_CLASS,
-                                NULL, /* no refresh handler */
-                                sxed_close_handler,
-                                sxed );
+    id = gnc_register_gui_component( DIALOG_SCHEDXACTION_EDITOR_CM_CLASS,
+                                     NULL, /* no refresh handler */
+                                     sxed_close_handler,
+                                     sxed );
+    // This ensure this dialog is closed when the session is closed.
+    gnc_gui_component_set_session (id, gnc_get_current_session());
 
     g_signal_connect( sxed->dialog, "delete_event",
                       G_CALLBACK(sxed_delete_event), sxed );
@@ -1593,7 +1599,6 @@ gnc_sxed_update_cal(GncSxEditorDialog *sxed)
     g_date_clear(&start_date, 1);
 
     gnc_frequency_save_to_recurrence(sxed->gncfreq, &recurrences, &start_date);
-    g_date_subtract_days(&start_date, 1);
     recurrenceListNextInstance(recurrences, &start_date, &first_date);
 
     /* Deal with the fact that this SX may have been run before [the
@@ -1604,10 +1609,10 @@ gnc_sxed_update_cal(GncSxEditorDialog *sxed)
         last_sx_inst = xaccSchedXactionGetLastOccurDate(sxed->sx);
         if (g_date_valid(last_sx_inst)
             && g_date_valid(&first_date)
-            && g_date_compare(last_sx_inst, &first_date) != 0)
+            && g_date_compare(last_sx_inst, &first_date) > 0)
         {
             /* last occurrence will be passed as initial date to update store
-             * later on as well */
+             * later on as well, but only if it's past first_date */
             start_date = *last_sx_inst;
             recurrenceListNextInstance(recurrences, &start_date, &first_date);
         }
@@ -1822,7 +1827,7 @@ gnc_ui_sx_initialize (void)
     _sx_engine_event_handler_id = qof_event_register_handler(_sx_engine_event_handler, NULL);
 
     gnc_hook_add_dangler(HOOK_BOOK_OPENED,
-                         (GFunc)gnc_sx_sxsincelast_book_opened, NULL);
+                         (GFunc)gnc_sx_sxsincelast_book_opened, NULL, NULL);
 
     /* Add page to preferences page for Scheduled Transactions */
     /* The parameters are; glade file, items to add from glade file - last being the dialog, preference tab name */

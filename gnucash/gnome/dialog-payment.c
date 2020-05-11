@@ -81,6 +81,7 @@ struct _payment_window
     GtkWidget   * dialog;
 
     GtkWidget   * payment_warning;
+    GtkWidget   * conflict_message;
     GtkWidget   * ok_button;
     GtkWidget   * num_entry;
     GtkWidget   * memo_entry;
@@ -218,6 +219,8 @@ gnc_payment_window_check_payment (PaymentWindow *pw)
     const char *conflict_msg = NULL;
     gnc_numeric amount_deb, amount_cred;
     gboolean enable_xfer_acct = TRUE;
+    gboolean allow_payment = TRUE;
+    GtkTreeSelection *selection;
 
     if (!pw)
         return FALSE;
@@ -226,6 +229,7 @@ gnc_payment_window_check_payment (PaymentWindow *pw)
     if (!pw->post_acct)
     {
         conflict_msg = _("You must enter a valid account name for posting.");
+        allow_payment = FALSE;
         goto update_cleanup;
     }
 
@@ -234,6 +238,7 @@ gnc_payment_window_check_payment (PaymentWindow *pw)
     if (!gncOwnerIsValid(&pw->owner))
     {
         conflict_msg = _("You must select a company for payment processing.");
+        allow_payment = FALSE;
         goto update_cleanup;
     }
 
@@ -255,8 +260,20 @@ gnc_payment_window_check_payment (PaymentWindow *pw)
         if (!pw->xfer_acct)
         {
             conflict_msg = _("You must select a transfer account from the account tree.");
+            allow_payment = FALSE;
+            goto update_cleanup;
         }
     }
+
+    /* this last test checks whether documents were selected. if none,
+       emit warning but still allow as an unattached payment. */
+    selection = gtk_tree_view_get_selection (GTK_TREE_VIEW(pw->docs_list_tree_view));
+    if (gtk_tree_selection_count_selected_rows (selection) == 0)
+    {
+        conflict_msg = _("No documents were selected to assign this payment to. This may create an unattached payment.");
+        allow_payment = TRUE;
+    }
+
 
 update_cleanup:
     gtk_widget_set_sensitive (pw->acct_tree, enable_xfer_acct);
@@ -272,20 +289,18 @@ update_cleanup:
         gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON(pw->print_check), pw->print_check_state);
 
     /* Check if there are issues preventing a successful payment */
-    gtk_widget_set_tooltip_text (pw->payment_warning, conflict_msg);
+    gtk_label_set_text (GTK_LABEL(pw->conflict_message), conflict_msg);
+    gtk_widget_set_sensitive (pw->ok_button, allow_payment);
     if (conflict_msg)
     {
         gtk_widget_show (pw->payment_warning);
-        gtk_widget_set_sensitive (pw->ok_button, FALSE);
-        return FALSE;
     }
     else
     {
         gtk_widget_hide (pw->payment_warning);
-        gtk_widget_set_sensitive (pw->ok_button, TRUE);
     }
 
-    return TRUE;
+    return allow_payment;
 }
 
 static void
@@ -417,7 +432,7 @@ gnc_payment_window_fill_docs_list (PaymentWindow *pw)
     g_return_if_fail (pw->docs_list_tree_view && GTK_IS_TREE_VIEW(pw->docs_list_tree_view));
 
     /* Get a list of open lots for this owner and post account */
-    if (pw->owner.owner.undefined)
+    if (pw->owner.owner.undefined && pw->post_acct)
         list = xaccAccountFindOpenLots (pw->post_acct, gncOwnerLotMatchOwnerFunc,
                                         &pw->owner, NULL);
 
@@ -710,6 +725,39 @@ gnc_payment_set_owner (PaymentWindow *pw, GncOwner *owner)
     gnc_payment_dialog_owner_changed(pw);
 }
 
+static void
+gnc_payment_update_style_classes (PaymentWindow *pw)
+{
+    GtkStyleContext *stylectxt = gtk_widget_get_style_context (GTK_WIDGET(pw->dialog));
+    const gchar *style_label = NULL;
+
+    if (gtk_style_context_has_class (stylectxt, "gnc-class-customers"))
+        gtk_style_context_remove_class (stylectxt, "gnc-class-customers");
+
+    if (gtk_style_context_has_class (stylectxt, "gnc-class-vendors"))
+        gtk_style_context_remove_class (stylectxt, "gnc-class-vendors");
+
+    if (gtk_style_context_has_class (stylectxt, "gnc-class-employees"))
+        gtk_style_context_remove_class (stylectxt, "gnc-class-employees");
+
+    switch (pw->owner_type)
+    {
+        case GNC_OWNER_CUSTOMER:
+            style_label = "gnc-class-customers";
+            break;
+        case GNC_OWNER_VENDOR:
+            style_label = "gnc-class-vendors";
+            break;
+        case GNC_OWNER_EMPLOYEE:
+            style_label = "gnc-class-employees";
+            break;
+        default:
+            style_label = "gnc-class-unknown";
+            break;
+    }
+    // Set a secondary style context for this page so it can be easily manipulated with css
+    gtk_style_context_add_class (stylectxt, style_label);
+}
 
 static void
 gnc_payment_set_owner_type (PaymentWindow *pw, GncOwnerType owner_type)
@@ -742,6 +790,7 @@ gnc_payment_set_owner_type (PaymentWindow *pw, GncOwnerType owner_type)
         }
         valid = gtk_tree_model_iter_next (store, &iter);
     }
+    gnc_payment_update_style_classes (pw);
 
     gnc_payment_dialog_owner_type_changed (pw);
 }
@@ -1069,7 +1118,7 @@ gnc_payment_leave_amount_cb (G_GNUC_UNUSED GtkWidget *widget,
     gnc_payment_window_check_payment (pw);
 }
 
-/* Select the list of accoutns to show in the tree */
+/* Select the list of accounts to show in the tree */
 static void
 gnc_payment_set_account_types (GncTreeViewAccount *tree)
 {
@@ -1173,11 +1222,12 @@ new_payment_window (GtkWindow *parent, QofBook *book, InitialPaymentInfo *tx_inf
     pw->dialog = GTK_WIDGET (gtk_builder_get_object (builder, "payment_dialog"));
     gtk_window_set_transient_for (GTK_WINDOW(pw->dialog), parent);
 
-    // Set the style context for this dialog so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(pw->dialog), "GncPaymentDialog");
+    // Set the name for this dialog so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(pw->dialog), "gnc-id-payment");
 
     /* Grab the widgets and build the dialog */
     pw->payment_warning = GTK_WIDGET (gtk_builder_get_object (builder, "payment_warning"));
+    pw->conflict_message = GTK_WIDGET (gtk_builder_get_object (builder, "conflict_message"));
     pw->ok_button = GTK_WIDGET (gtk_builder_get_object (builder, "okbutton"));
     pw->num_entry = GTK_WIDGET (gtk_builder_get_object (builder, "num_entry"));
     pw->memo_entry = GTK_WIDGET (gtk_builder_get_object (builder, "memo_entry"));

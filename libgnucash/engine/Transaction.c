@@ -228,13 +228,13 @@ xaccTransStillHasSplit(const Transaction *trans, const Split *s)
         }                                                               \
     }
 
-G_INLINE_FUNC void mark_trans (Transaction *trans);
+static inline void mark_trans (Transaction *trans);
 void mark_trans (Transaction *trans)
 {
     FOR_EACH_SPLIT(trans, mark_split(s));
 }
 
-G_INLINE_FUNC void gen_event_trans (Transaction *trans);
+static inline void gen_event_trans (Transaction *trans);
 void gen_event_trans (Transaction *trans)
 {
     GList *node;
@@ -524,13 +524,14 @@ void
 xaccTransDump (const Transaction *trans, const char *tag)
 {
     GList *node;
+    char datebuff[MAX_DATE_LENGTH + 1];
 
     printf("%s Trans %p", tag, trans);
     memset(datebuff, 0, sizeof(datebuff));
-    qof_print_date_buff(datebuff, sizeof(datebuff), trans->date_entered);
+    qof_print_date_buff(datebuff, MAX_DATE_LENGTH, trans->date_entered);
     printf("    Entered:     %s\n", datebuff);
     memset(datebuff, 0, sizeof(datebuff));
-    qof_print_date_buff(datebuff, sizeof(datebuff), trans->date_posted);
+    qof_print_date_buff(datebuff, MAX_DATE_LENGTH, trans->date_posted);
     printf("    Posted:      %s\n", datebuff);
     printf("    Num:         %s\n", trans->num ? trans->num : "(null)");
     printf("    Description: %s\n",
@@ -675,15 +676,25 @@ Transaction *
 xaccTransClone (const Transaction *from)
 {
     Transaction *to = xaccTransCloneNoKvp (from);
-    int i = 0;
-    int length = g_list_length (from->splits);
+    GList *lfrom, *lto;
 
     xaccTransBeginEdit (to);
     qof_instance_copy_kvp (QOF_INSTANCE (to), QOF_INSTANCE (from));
-    g_assert (g_list_length (to->splits) == length);
-    for (i = 0; i < length; ++i)
-	xaccSplitCopyKvp (g_list_nth_data (from->splits, i),
-			    g_list_nth_data (to->splits, i));
+    g_return_val_if_fail (g_list_length (to->splits) == g_list_length (from->splits),
+                          NULL);
+
+    lfrom = from->splits;
+    lto = to->splits;
+
+    /* lfrom and lto are known to be of equal length via above
+       g_return_val_if_fail */
+    while (lfrom != NULL)
+    {
+        xaccSplitCopyKvp (lfrom->data, lto->data);
+        lfrom = lfrom->next;
+        lto = lto->next;
+    }
+
     xaccTransCommitEdit (to);
     return to;
 }

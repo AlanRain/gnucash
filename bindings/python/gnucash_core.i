@@ -56,7 +56,6 @@
 #include "guid.h"
 #include "qofquery.h"
 #include "qofquerycore.h"
-#include "gnc-module.h"
 #include "gnc-engine.h"
 #include "Transaction.h"
 #include "Split.h"
@@ -93,7 +92,7 @@
 
 %include <qofbackend.h>
 
-// this function is defined in qofsession.h, but isnt found in the libraries,
+// this function is defined in qofsession.h, but isn't found in the libraries,
 // ignored because SWIG attempts to link against (to create language bindings)
 %ignore qof_session_not_saved;
 %include <qofsession.h>
@@ -221,9 +220,9 @@ gnc_environment_setup();
 qof_log_init();
 qof_init();
 qof_query_init();
-gnc_module_system_init();
 char * no_args[1] = { NULL };
 gnc_engine_init(0, no_args);
 gnc_prefs_init();
 %}
-
+//We must explicitly declare this or it gets left out and we can't create books.
+QofBook* qof_book_new (void);

@@ -14,7 +14,7 @@
  *                                                                  *
  * You should have received a copy of the GNU General Public License*
  * along with this program; if not, you can retrieve it from        *
- * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html            *
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html            *
  * or contact:                                                      *
  *                                                                  *
  * Free Software Foundation           Voice:  +1-617-542-5942       *
@@ -936,6 +936,8 @@ test_xaccTransEqual (Fixture *fixture, gconstpointer pData)
 
         split10->balance = split00->balance;
         split11->balance = split01->balance;
+        split10->noclosing_balance = split00->noclosing_balance;
+        split11->noclosing_balance = split01->noclosing_balance;
         g_assert (xaccTransEqual (txn1, txn0, TRUE, TRUE, TRUE, TRUE));
     }
     g_free (check3->msg);

@@ -4,20 +4,6 @@
 set(SCHEMADIR_BUILD ${DATADIR_BUILD}/glib-2.0/schemas)
 file(MAKE_DIRECTORY ${SCHEMADIR_BUILD})
 unset(gschema_depends CACHE)
-# Check for GDK_MODIFIER_INTENT_DEFAULT_MOD_MASK; it's Gtk3-14 and later.
-include(CheckCSourceCompiles)
-unset(have_mod_mask CACHE)
-set(CMAKE_REQUIRED_INCLUDES ${GTK3_INCLUDE_DIRS})
-check_c_source_compiles("
-#include <gdk/gdk.h>
-
-int main (int argc, char** argv) {
-  GdkModifierIntent foo = GDK_MODIFIER_INTENT_DEFAULT_MOD_MASK;
-  return 0;
-}
-"
- have_mod_mask)
-
 # The subdirectories
 add_subdirectory (gnome)
 add_subdirectory (gnome-utils)
@@ -39,11 +25,11 @@ if (WIN32)
     set (GNUCASH_RESOURCE_FILE ${CMAKE_CURRENT_BINARY_DIR}/gnucash.rc)
     configure_file(gnucash.rc.in gnucash.rc @ONLY NEWLINE_STYLE WIN32)
 
-else (WIN32)
+else()
   # All other platforms use these settings:
   set (PLATFORM_FILES gnucash-valgrind)
 
-endif (WIN32)
+endif()
 
 set (gnucash_SOURCES
   gnucash-bin.c
@@ -61,13 +47,15 @@ target_compile_definitions(gnucash PRIVATE -DG_LOG_DOMAIN=\"gnc.bin\")
 
 if (BUILDING_FROM_VCS)
   target_compile_definitions(gnucash PRIVATE -DGNC_VCS=\"git\")
-  target_compile_definitions(gncmod-gnome-utils PRIVATE -DGNC_VCS=\"git\")
-endif (BUILDING_FROM_VCS)
+  target_compile_definitions(gnc-gnome-utils PRIVATE -DGNC_VCS=\"git\")
+endif()
 
 target_link_libraries (gnucash
-   gncmod-ledger-core gncmod-report-gnome gnc-gnome gncmod-gnome-utils gncmod-app-utils
-   gncmod-engine gnc-module gnc-core-utils gncmod-report-system
-   ${GUILE_LDFLAGS} ${GLIB2_LDFLAGS} ${GTK3_LDFLAGS} ${GTK_MAC_LDFLAGS}
+   gnc-ledger-core gnc-gnome gnc-gnome-utils gnc-app-utils
+   gnc-engine gnc-module gnc-core-utils gnucash-guile
+   gnc-qif-import gnc-csv-import gnc-csv-export gnc-log-replay
+   gnc-bi-import gnc-customer-import gnc-report
+   PkgConfig::GTK3 ${GUILE_LDFLAGS} ${GLIB2_LDFLAGS} ${GTK_MAC_LDFLAGS}
 )
 
 # Get glib executable for generating the gresource file
@@ -111,7 +99,7 @@ add_custom_command(
 if (MAC_INTEGRATION)
   target_compile_options(gnucash PRIVATE ${OSX_EXTRA_COMPILE_FLAGS})
   target_link_libraries(gnucash ${OSX_EXTRA_LIBRARIES})
-endif(MAC_INTEGRATION)
+endif()
 
 install(TARGETS gnucash DESTINATION ${CMAKE_INSTALL_BINDIR})
 # No headers to install.
@@ -168,7 +156,7 @@ if (LIBDBI_LIBRARY AND LIBDBI_DRIVERS_DIR)
   get_filename_component(libdir ${LIBDBI_LIBRARY} DIRECTORY)
   string(FIND ${LIBDBI_DRIVERS_DIR} ${libdir} is_subdir)
   if (NOT is_subdir EQUAL 0)
-    file(APPEND ${BUILD_ENV_FILE_OUT} "GNC_DBD_DIR=${LIBDBI_DRIVERS_DIR}")
+    file(APPEND ${BUILD_ENV_FILE_OUT} "GNC_DBD_DIR=${LIBDBI_DRIVERS_DIR}\n")
   endif()
 endif()
 
@@ -238,7 +226,7 @@ if (WIN32)
       file(TO_NATIVE_PATH ${CMAKE_PREFIX_PATH}/${dir}/bin PATH_ITEM)
       list(APPEND CMD_LINES "set PATH=${PATH_ITEM}\;%PATH%\n")
     endforeach(dir)
-  endif (NOT ${MINGW64})
+  endif()
   set(CMD_FILE ${CMAKE_CURRENT_BINARY_DIR}/gnucash-launcher.cmd)
   file(WRITE ${CMD_FILE} "@echo off\nsetlocal\n\n")
   foreach(line ${CMD_LINES})
@@ -254,7 +242,7 @@ if (WIN32)
   file(APPEND ${BUILD_CMD_FILE} "\nstart gnucash %*\n")
 
   install(PROGRAMS ${CMD_FILE} DESTINATION  ${CMAKE_INSTALL_BINDIR})
-endif(WIN32)
+endif()
 
 # The GResource Files are absolute paths but set_local_dist requires
 # relative paths.
@@ -264,9 +252,15 @@ foreach(gres_file ${gresource_files})
   list(APPEND gresource_files ${rel_file})
 endforeach()
 
+
+gnc_add_scheme_targets(price-quotes
+    SOURCES price-quotes.scm
+    OUTPUT_DIR gnucash
+    DEPENDS "scm-engine;scm-app-utils;scm-gnome-utils")
+
 set_local_dist(gnucash_DIST_local CMakeLists.txt environment.in generate-gnc-script
                gnucash-bin.c gnucash.rc.in gnucash-valgrind.in gnucash-gresources.xml ${gresource_files}
-               ${gnucash_EXTRA_DIST})
+               price-quotes.scm ${gnucash_EXTRA_DIST})
 
 set (gnucash_DIST ${gnucash_DIST_local} ${gnome_DIST} ${gnome_search_DIST} ${gnome_utils_DIST}
     ${gschemas_DIST} ${gtkbuilder_DIST} ${html_DIST} ${import_export_DIST} ${python_DIST} ${register_DIST}

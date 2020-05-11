@@ -1,15 +1,17 @@
 import sys
-import gnucash._sw_app_utils as _sw_app_utils
 from gnucash import *
-from gnucash._sw_core_utils import gnc_prefs_is_extra_enabled
+from gnucash._sw_core_utils import gnc_prefs_is_extra_enabled, gnc_prefs_is_debugging_enabled
 from gi import require_version
 require_version('Gtk', '3.0')
 from gi.repository import Gtk
 import os
 sys.path.append(os.path.dirname(__file__))
-noisy = gnc_prefs_is_extra_enabled()
-if noisy:
-    print("woop", os.path.dirname(__file__))
+
+# output file location if gnucash has been started with
+# gnucash --extra
+if gnc_prefs_is_extra_enabled():
+    print("Python shell init file: %s" % (__file__))
+
 # Importing the console class causes SIGTTOU to be thrown if GnuCash is
 # started in the background.  This causes a hang if it is not handled, 
 # so ignore it for the duration
@@ -21,15 +23,18 @@ import pycons.console as cons
 # Restore the SIGTTOU handler
 signal.signal(signal.SIGTTOU, old_sigttou)
 
-if noisy:
-    print("Hello from python!")
-    print("test", sys.modules.keys())
-    print("test2", dir(_sw_app_utils))
+# output debug information if gnucash has been started with
+# gnucash --debug --extra
+if gnc_prefs_is_extra_enabled() and gnc_prefs_is_debugging_enabled():
+    print("Hello from python!\n")
+    print("sys.modules.keys(): ", sys.modules.keys(), "\n")
+    print("dir(_sw_app_utils): ", dir(_sw_app_utils), "\n")
 
-   #root = _sw_app_utils.gnc_get_current_root_account()
+    #session = app_utils.gnc_get_current_session()
+    #root account can later on be accessed by session.get_book().get_root_account()
 
    #print("test", dir(root), root.__class__)
-    print("test3", dir(gnucash_core_c))
+    print("dir(gnucash_core_c): ", dir(gnucash_core_c))
 
    #acct = Account(instance = root)
 
@@ -43,8 +48,9 @@ class Console (cons.Console):
     """ GTK python console """
 
     def __init__(self, argv=[], shelltype='python', banner=[],
-                 filename=None, size=100):
-        cons.Console.__init__(self, argv, shelltype, banner, filename, size)
+                 filename=None, size=100, user_local_ns=None, user_global_ns=None):
+        cons.Console.__init__(self, argv, shelltype, banner, filename, size,
+                        user_local_ns=user_local_ns, user_global_ns=user_global_ns)
         self.buffer.create_tag('center',
                                justification=Gtk.Justification.CENTER,
                                font='Mono 4')
@@ -95,13 +101,21 @@ class Console (cons.Console):
 
 # Change this to "if True:" to switch on a python console at gnucash
 # startup:
+# shelltype can either be "python" or "ipython" (the latter is not yet fully functional)
 if False:
-    console = Console(argv = [], shelltype = 'python', banner = [['woop', 'title']], size = 100)
+    shelltype = "python"
+    title = "gnucash "+shelltype+" shell"
+    banner_style = 'title'
+    banner = "Welcome to "+title+"!\n"
 
     window = Gtk.Window(type = Gtk.WindowType.TOPLEVEL)
     window.set_position(Gtk.WindowPosition.CENTER)
     window.set_default_size(800,600)
     window.set_border_width(0)
+
+    console = Console(argv = [], shelltype = shelltype, banner = [[banner, banner_style]],
+                            size = 100, user_local_ns=locals(), user_global_ns=globals())
+
     window.connect('destroy-event', console.quit_event)
     window.connect('delete-event', console.quit_event)
     window.add (console)

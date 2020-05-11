@@ -166,7 +166,7 @@ struct GncTreeModelSplitRegPrivate
 */
 
 /*FIXME I thought this would work, it does not ????????? */
-/* Do we need to test for a valid iter every where, is it enougth to test on make iter ? */
+/* Do we need to test for a valid iter every where, is it enough to test on make iter ? */
 #define VALID_ITER (model, iter) \
  (GNC_IS_TREE_MODEL_SPLIT_REG (model) && \
  ((iter).user_data != NULL) && ((iter).user_data2 != NULL) && (model->stamp == (gint)(iter).stamp) && \
@@ -220,7 +220,7 @@ gtm_sr_make_iter (GncTreeModelSplitReg *model, gint f, GList *tnode, GList *snod
 
 
 #define GNC_TREE_MODEL_SPLIT_REG_GET_PRIVATE(o)  \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_TREE_MODEL_SPLIT_REG, GncTreeModelSplitRegPrivate))
+   ((GncTreeModelSplitRegPrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_TREE_MODEL_SPLIT_REG))
 
 /************************************************************/
 /*               g_object required functions                */
@@ -451,7 +451,7 @@ gnc_tree_model_split_reg_dispose (GObject *object)
 /* Create a new tree model */
 GncTreeModelSplitReg *
 gnc_tree_model_split_reg_new (SplitRegisterType2 reg_type, SplitRegisterStyle2 style,
-                        gboolean use_double_line, gboolean is_template)
+                        gboolean use_double_line, gboolean is_template, gboolean mismatched_commodities)
 {
     GncTreeModelSplitReg *model;
     GncTreeModelSplitRegPrivate *priv;
@@ -469,6 +469,7 @@ gnc_tree_model_split_reg_new (SplitRegisterType2 reg_type, SplitRegisterStyle2 s
     model->style = style;
     model->use_double_line = use_double_line;
     model->is_template = is_template;
+    model->mismatched_commodities = mismatched_commodities;
 
     model->sort_col = 1;
     model->sort_depth = 1;
@@ -687,7 +688,7 @@ gnc_tree_model_split_reg_move (GncTreeModelSplitReg *model, GncTreeModelSplitReg
 
     priv = model->priv;
 
-    // if list is not long enougth, return
+    // if list is not long enough, return
     if (g_list_length (priv->full_tlist) < NUM_OF_TRANS*3)
         return;
 
@@ -850,7 +851,7 @@ gnc_tree_model_split_reg_get_tooltip (GncTreeModelSplitReg *model, gint position
         else
         {
             time64 t = xaccTransRetDatePosted (trans);
-            qof_print_date_buff (date_text, sizeof(date_text), t);
+            qof_print_date_buff (date_text, MAX_DATE_LENGTH, t);
             desc_text = xaccTransGetDescription (trans);
             model->current_trans = trans;
             return g_strconcat (date_text, "\n", desc_text, NULL);
@@ -958,7 +959,7 @@ gnc_tree_model_split_reg_set_data (GncTreeModelSplitReg *model, gpointer user_da
 {
     GncTreeModelSplitRegPrivate *priv;
 
-/*FIXME This is used to get the parent window, mabe move to view */
+/*FIXME This is used to get the parent window, maybe move to view */
     priv = model->priv;
 
     priv->user_data = user_data;
@@ -1374,7 +1375,7 @@ gnc_tree_model_split_reg_get_path (GtkTreeModel *tree_model, GtkTreeIter *iter)
         else if (tnode && snode)
         {
             /* Can not use snode position directly as slist length does not follow
-               number of splits exactly, especailly if you delete a split */
+               number of splits exactly, especially if you delete a split */
             spos = xaccTransGetSplitIndex (tnode->data, snode->data);
         }
 
@@ -2851,9 +2852,7 @@ gnc_tree_model_split_reg_update_action_list (GncTreeModelSplitReg *model)
         /* broken ! FIXME bg ????????? What is broken */
     case SEARCH_LEDGER2:
 
-        /* Translators: This string has a context prefix; the translation
-        	must only contain the part after the | character. */
-        gtk_list_store_insert_with_values (store, &iter, 100, 0, Q_("Action Column|Deposit"), -1);
+        gtk_list_store_insert_with_values (store, &iter, 100, 0, C_("Action Column", "Deposit"), -1);
         gtk_list_store_insert_with_values (store, &iter, 100, 0, _("Withdraw"), -1);
         gtk_list_store_insert_with_values (store, &iter, 100, 0, _("Check"), -1);
         gtk_list_store_insert_with_values (store, &iter, 100, 0, _("Interest"), -1);
@@ -2952,8 +2951,7 @@ gnc_tree_model_split_reg_update_action_list (GncTreeModelSplitReg *model)
         gtk_list_store_insert_with_values (store, &iter, 100, 0, _("Income"), -1);
         /* Action: Distribution */
         gtk_list_store_insert_with_values (store, &iter, 100, 0, _("Dist"), -1);
-        /* Translators: This string has a disambiguation prefix */
-        gtk_list_store_insert_with_values (store, &iter, 100, 0, Q_("Action Column|Split"), -1);
+        gtk_list_store_insert_with_values (store, &iter, 100, 0, C_("Action Column", "Split"), -1);
         break;
 
     default:

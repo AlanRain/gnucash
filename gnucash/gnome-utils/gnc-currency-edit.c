@@ -93,7 +93,7 @@ typedef struct _GNCCurrencyEditPrivate
 G_DEFINE_TYPE_WITH_PRIVATE(GNCCurrencyEdit, gnc_currency_edit, GTK_TYPE_COMBO_BOX)
 
 #define GET_PRIVATE(o)  \
-   (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNC_TYPE_CURRENCY_EDIT, GNCCurrencyEditPrivate))
+   ((GNCCurrencyEditPrivate*)g_type_instance_get_private((GTypeInstance*)o, GNC_TYPE_CURRENCY_EDIT))
 
 /** @name Basic Object Implementation */
 /** @{ */
@@ -193,8 +193,8 @@ gnc_currency_edit_class_init (GNCCurrencyEditClass *klass)
 static void
 gnc_currency_edit_init (GNCCurrencyEdit *gce)
 {
-    // Set the style context for this widget so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(gce), "GncCurrencyEdit");
+    // Set the name for this widget so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(gce), "gnc-id-currency-edit");
 
     g_signal_connect (gce, "notify::mnemonic",
                       G_CALLBACK (gnc_currency_edit_mnemonic_changed), gce);

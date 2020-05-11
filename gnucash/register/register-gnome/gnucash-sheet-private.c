@@ -136,7 +136,7 @@ find_cell_by_pixel (GnucashSheet *sheet, gint x, gint y,
     {
         cd = gnucash_style_get_cell_dimensions (style, row, 0);
 
-        if (y >= cd->origin_y && y < cd->origin_y + cd->pixel_height)
+        if (cd && y >= cd->origin_y && y < cd->origin_y + cd->pixel_height)
             break;
 
         row++;
@@ -150,7 +150,7 @@ find_cell_by_pixel (GnucashSheet *sheet, gint x, gint y,
     {
         cd = gnucash_style_get_cell_dimensions (style, row, col);
 
-        if (x >= cd->origin_x && x < cd->origin_x + cd->pixel_width)
+        if (cd && x >= cd->origin_x && x < cd->origin_x + cd->pixel_width)
             break;
 
         col++;
@@ -245,7 +245,7 @@ static guint8 inc_intensity_byte(guint8 input, int numerator, int denominator)
 }
 
 /** For a given RGB value, increase the color intensity for each of the three
-colors indentically by 10 percent (i.e. make them "less black" and "more gray")
+colors identically by 10 percent (i.e. make them "less black" and "more gray")
 and return this changed RGB value. */
 static guint32 inc_intensity_10percent(guint32 argb)
 {
@@ -269,7 +269,7 @@ static guint8 dec_intensity_byte(guint8 input, int numerator, int denominator)
 }
 
 /** For a given RGB value, decrease the color intensity for each of the three
-colors indentically by 10 percent and return this changed RGB value. */
+colors identically by 10 percent and return this changed RGB value. */
 static guint32 dec_intensity_10percent(guint32 argb)
 {
     // Multiply each single byte by 9/10 i.e. by 0.9 which decreases the
@@ -283,7 +283,7 @@ static guint32 dec_intensity_10percent(guint32 argb)
 
 /* Actual drawing routines */
 
-G_INLINE_FUNC void
+static inline void
 draw_cell_line (cairo_t *cr, GdkRGBA *bg_color,
                 double x1, double y1, double x2, double y2,
                 PhysicalCellBorderLineStyle style);
@@ -396,12 +396,19 @@ draw_cell (GnucashSheet *sheet,
     int x_offset;
     GtkStyleContext *stylectxt = gtk_widget_get_style_context (GTK_WIDGET(sheet));
     GdkRGBA color;
+    gboolean use_neg_class = TRUE;
 
     gtk_style_context_save (stylectxt);
 
+    text = gnc_table_get_entry (table, virt_loc);
+
+    // test for any text, if no text we do not want to add gnc-class-negative-numbers
+    if (!text || *text == '\0')
+        use_neg_class = FALSE;
+
     // Get the color type and apply the css class
     color_type = gnc_table_get_color (table, virt_loc, &hatching);
-    gnucash_get_style_classes (sheet, stylectxt, color_type);
+    gnucash_get_style_classes (sheet, stylectxt, color_type, use_neg_class);
 
     // Are we in a read-only row? Then make the background color somewhat more grey.
     if ((virt_loc.phys_row_offset < block->style->nrows)
@@ -477,8 +484,6 @@ draw_cell (GnucashSheet *sheet,
                            table->model->dividing_row_lower, block->style->nrows,
                            fg_color, x, y, width, height);
 
-    text = gnc_table_get_entry (table, virt_loc);
-
     layout = gtk_widget_create_pango_layout (GTK_WIDGET (sheet), text);
 
     if (gtk_style_context_has_class (stylectxt, GTK_STYLE_CLASS_VIEW))
@@ -496,7 +501,7 @@ draw_cell (GnucashSheet *sheet,
             && (virt_loc.vcell_loc.virt_row < table->model->dividing_row_upper))
     {
         // Make text color greyed
-        gtk_style_context_add_class (stylectxt, "lighter-grey-mix");
+        gtk_style_context_add_class (stylectxt, "gnc-class-lighter-grey-mix");
     }
 #endif
 
@@ -511,7 +516,7 @@ draw_cell (GnucashSheet *sheet,
             goto exit;
 
         // Make text color greyed
-        gtk_style_context_add_class (stylectxt, "lighter-grey-mix");
+        gtk_style_context_add_class (stylectxt, "gnc-class-lighter-grey-mix");
 
         pango_layout_set_text (layout, text, strlen (text));
         pango_font_description_set_style (font, PANGO_STYLE_ITALIC);
@@ -572,6 +577,8 @@ draw_block (GnucashSheet *sheet,
                  (block->style,
                   virt_loc.phys_row_offset,
                   virt_loc.phys_col_offset);
+
+            if (!cd) break;
 
             x_paint = block->origin_x + cd->origin_x - x;
             if (x_paint > width)
@@ -694,13 +701,4 @@ gnucash_sheet_draw_cursor (GnucashCursor *cursor, cairo_t *cr)
 
     cairo_set_line_width (cr, 1.0);
     cairo_stroke (cr);
-}
-
-void
-gnc_widget_set_css_name (GtkWidget *widget, const char *name)
-{
-#if !GTK_CHECK_VERSION(3,20,0)
-    GtkStyleContext *context = gtk_widget_get_style_context (widget);
-    gtk_style_context_add_class (context, name);
-#endif
 }

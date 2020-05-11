@@ -591,7 +591,7 @@ gnc_preferences_build_page (gpointer data,
     gnc_prefs_build_widget_table(builder, dialog);
 
     /* Connect the signals in this glade file. The dialog is passed in
-     * so the the callback can find "interesting" widgets from other
+     * so the callback can find "interesting" widgets from other
      * glade files if necessary (via the GPREFS_WIDGET_HASH hash table). */
     gtk_builder_connect_signals_full (builder, gnc_builder_connect_full_func, dialog);
 
@@ -859,7 +859,7 @@ file_chooser_clear_cb (GtkButton *button, gpointer user_data)
     GtkWidget            *fcb_new;
     gchar                *boxname;
 
-    /* We need to distroy the GtkFileChooserButton and recreate as there
+    /* We need to destroy the GtkFileChooserButton and recreate as there
        does not seem to be away of resetting the folder path to NONE */
     box = gtk_widget_get_parent (GTK_WIDGET(fcb));
     gtk_widget_destroy (GTK_WIDGET(fcb));
@@ -1250,12 +1250,16 @@ gnc_preferences_dialog_create(GtkWindow *parent)
     gnc_builder_add_from_file (builder, "dialog-preferences.glade", "retain_days_adj");
     gnc_builder_add_from_file (builder, "dialog-preferences.glade", "tab_width_adj");
     gnc_builder_add_from_file (builder, "dialog-preferences.glade", "date_formats");
+    gnc_builder_add_from_file (builder, "dialog-preferences.glade", "atm_fee_adj");
+    gnc_builder_add_from_file (builder, "dialog-preferences.glade", "auto_add_adj");
+    gnc_builder_add_from_file (builder, "dialog-preferences.glade", "auto_clear_adj");
+    gnc_builder_add_from_file (builder, "dialog-preferences.glade", "match_adj");
     gnc_builder_add_from_file (builder, "dialog-preferences.glade", "gnucash_preferences_dialog");
 
     dialog = GTK_WIDGET(gtk_builder_get_object (builder, "gnucash_preferences_dialog"));
 
-    // Set the style context for this dialog so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(dialog), "GncPreferenceDialog");
+    // Set the name for this dialog so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(dialog), "gnc-id-preferences");
 
     /* parent */
     gtk_window_set_transient_for (GTK_WINDOW(dialog), GTK_WINDOW(parent));

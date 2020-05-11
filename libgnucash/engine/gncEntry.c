@@ -200,7 +200,7 @@ gboolean gncEntryPaymentStringToType (const char *str, GncEntryPaymentType *type
 	member = tmp; \
 	}
 
-G_INLINE_FUNC void mark_entry (GncEntry *entry);
+static inline void mark_entry (GncEntry *entry);
 void mark_entry (GncEntry *entry)
 {
     qof_instance_set_dirty(&entry->inst);
@@ -1334,7 +1334,7 @@ gncEntryRecomputeValues (GncEntry *entry)
     if (entry->b_tax_table)
     {
         time64 modtime = gncTaxTableLastModifiedSecs (entry->b_tax_table);
-        if (entry->b_taxtable_modtime == modtime)
+        if (entry->b_taxtable_modtime != modtime)
         {
             entry->values_dirty = TRUE;
             entry->b_taxtable_modtime = modtime;

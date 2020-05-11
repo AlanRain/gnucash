@@ -378,8 +378,8 @@ gnc_stock_split_assistant_finish (GtkAssistant *assistant,
     xaccSplitMakeStockSplit (split);
     /* Set split-action with gnc_set_num_action which is the same as
      * xaccSplitSetAction with these arguments */
-    /* Translators: This string has a disambiguation prefix */
-    gnc_set_num_action (NULL, split, NULL, Q_("Action Column|Split"));
+
+    gnc_set_num_action (NULL, split, NULL, C_("Action Column", "Split"));
 
     amount = gnc_amount_edit_get_amount (GNC_AMOUNT_EDIT (info->price_edit));
     if (gnc_numeric_positive_p (amount))
@@ -532,8 +532,8 @@ gnc_stock_split_assistant_create (StockSplitInfo *info)
     window = GTK_WIDGET(gtk_builder_get_object (builder, "stock_split_assistant"));
     info->window = window;
 
-    // Set the style context for this assistant so it can be easily manipulated with css
-    gnc_widget_set_style_context (GTK_WIDGET(window), "GncAssistStockSplit");
+    // Set the name for this assistant so it can be easily manipulated with css
+    gtk_widget_set_name (GTK_WIDGET(window), "gnc-id-assistant-stock-split");
 
     /* Enable buttons on first, second, fourth and last page. */
     gtk_assistant_set_page_complete (GTK_ASSISTANT (window),

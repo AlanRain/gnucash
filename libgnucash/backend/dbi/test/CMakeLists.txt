@@ -10,7 +10,7 @@ set(BACKEND_DBI_TEST_INCLUDE_DIRS
   ${LIBDBI_INCLUDE_PATH}
   ${GLIB2_INCLUDE_DIRS}
 )
-set(BACKEND_DBI_TEST_LIBS gnc-backend-sql gncmod-engine gncmod-test-engine test-core ${Boost_REGEX_LIBRARY} ${LIBDBI_LIBRARY})
+set(BACKEND_DBI_TEST_LIBS gnc-backend-sql gnc-engine gnc-test-engine test-core ${Boost_REGEX_LIBRARY} ${LIBDBI_LIBRARY})
 
 set(test_dbi_backend_SOURCES
   test-backend-dbi.cpp
@@ -36,5 +36,6 @@ if (WITH_SQL AND NOT WIN32)
     TEST_MYSQL_URL=\"${TEST_MYSQL_URL}\"
     TEST_PGSQL_URL=\"${TEST_PGSQL_URL}\"
     DBI_TEST_XML_FILENAME=\"${CMAKE_CURRENT_SOURCE_DIR}/test-dbi.xml\"
+    G_LOG_DOMAIN=\"gnc.backend.dbi\"
   )
 endif()

@@ -32,12 +32,10 @@ extern "C"
 #include <unistd.h>
 #include <dirent.h>
 
-#include "gnc-module.h"
 #include "gnc-engine.h"
 #include "test-engine-stuff.h"
 }
 
-#include <libguile.h>
 #include "test-file-stuff.h"
 #include "io-gncxml-v2.h"
 
@@ -65,20 +63,21 @@ test_load_file (const char* filename)
     }
 }
 
-static void
-guile_main (void* closure, int argc, char** argv)
+int
+main (int argc, char** argv)
 {
     const char* location = g_getenv ("GNC_ACCOUNT_PATH");
     GSList* list = NULL;
     GDir* ea_dir;
+
+    g_setenv ("GNC_UNINSTALLED", "1", TRUE);
 
     if (!location)
     {
         location = "../../../../data/accounts/C";
     }
 
-    gnc_module_system_init ();
-    gnc_module_load ("gnucash/engine", 0);
+    gnc_engine_init (0, NULL);
 
     if ((ea_dir = g_dir_open (location, 0, NULL)) == NULL)
     {
@@ -113,13 +112,5 @@ guile_main (void* closure, int argc, char** argv)
 
 
     print_test_results ();
-    exit (get_rv ());
-}
-
-int
-main (int argc, char** argv)
-{
-    g_setenv ("GNC_UNINSTALLED", "1", TRUE);
-    scm_boot_guile (argc, argv, guile_main, NULL);
     exit (get_rv ());
 }
